@@ -1,0 +1,32 @@
+name: go
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - run: gofmt -l . | tee /dev/stderr | (! read)
+        name: gofmt
+
+      - run: go vet ./...
+
+      - run: go test -race ./...
+
+      # The checked-in client must match the checked-in specification. A spec
+      # updated without regenerating would ship a client that does not describe
+      # the API it was exported from.
+      - name: client.gen.go is up to date
+        run: |
+          go run github.com/oapi-codegen/oapi-codegen/v2/cmd/oapi-codegen@v2.4.1 \
+            --config oapi-codegen.yaml openapi.yaml
+          git diff --exit-code client.gen.go

@@ -1,0 +1,71 @@
+{
+  "note": "Signature conformance vectors shared by the service and the SDK. Signed material is \"<timestamp>.<body>\" with HMAC-SHA256; the signature is lowercase hex. Bodies are byte-exact - do not reformat.",
+  "header_name": "X-Polyflow-Signature",
+  "rotated_secret": "whsec_0000000000000000000000000000000a",
+  "cases": [
+    {
+      "name": "deposit",
+      "secret": "whsec_5f4dcc3b5aa765d61d8327deb882cf99",
+      "timestamp": 1786440166,
+      "body": "{\"txid\":\"0xabc#3\",\"tx_hash\":\"0xabc\",\"transfer_index\":3,\"address\":\"0xdead\",\"from_address\":\"0xbeef\",\"amount\":\"12.5\",\"raw_amount\":\"12500000000000000000\",\"status\":1,\"chain\":\"bsc\",\"chain_id\":\"56\",\"currency\":\"USDT\",\"token_id\":\"0x55d398326f99059ff775485246999027b3197955\",\"decimals\":18,\"block_height\":\"42\",\"block_time\":\"1786440166\",\"confirmations\":15,\"timestamp\":\"1756684800000\"}",
+      "signature": "59ddb125533c45aea52c1d5c3689297286c37b3ce0a2f128931d6f9877b52a42",
+      "header": "t=1786440166,v1=59ddb125533c45aea52c1d5c3689297286c37b3ce0a2f128931d6f9877b52a42"
+    },
+    {
+      "name": "withdrawal_success",
+      "secret": "whsec_5f4dcc3b5aa765d61d8327deb882cf99",
+      "timestamp": 1786440166,
+      "body": "{\"third_party_id\":\"wd-0001\",\"status\":0,\"amount\":\"100\",\"txid\":\"0xfeed\",\"chain\":\"bsc\",\"chain_id\":\"56\",\"currency\":\"USDT\",\"token_id\":\"0x55d3\",\"block_height\":\"99\",\"timestamp\":\"1756684800000\"}",
+      "signature": "f25113b1b24b5c119d0a415497c4b6201ec6270191b6095e225244d92de78155",
+      "header": "t=1786440166,v1=f25113b1b24b5c119d0a415497c4b6201ec6270191b6095e225244d92de78155"
+    },
+    {
+      "name": "withdrawal_failed",
+      "secret": "whsec_5f4dcc3b5aa765d61d8327deb882cf99",
+      "timestamp": 1786440166,
+      "body": "{\"third_party_id\":\"wd-0002\",\"status\":2,\"amount\":\"100\",\"txid\":\"\",\"chain\":\"bsc\",\"chain_id\":\"56\",\"currency\":\"USDT\",\"token_id\":\"0x55d3\",\"block_height\":\"0\",\"timestamp\":\"1756684800000\",\"failed_reason\":\"insufficient hot wallet balance\"}",
+      "signature": "6659de80bf00def4faa62ac636824f0524c1d569722996095f9a2121520516ca",
+      "header": "t=1786440166,v1=6659de80bf00def4faa62ac636824f0524c1d569722996095f9a2121520516ca"
+    },
+    {
+      "name": "empty_body",
+      "secret": "whsec_5f4dcc3b5aa765d61d8327deb882cf99",
+      "timestamp": 1786440166,
+      "body": "",
+      "signature": "bb6500efcc03d34b0d9d07c4d1b116c2ed5947771275609291bc97b05b98b071",
+      "header": "t=1786440166,v1=bb6500efcc03d34b0d9d07c4d1b116c2ed5947771275609291bc97b05b98b071"
+    },
+    {
+      "name": "body_with_header_delimiters",
+      "secret": "whsec_5f4dcc3b5aa765d61d8327deb882cf99",
+      "timestamp": 1786440166,
+      "body": "{\"note\":\"t=1,v1=deadbeef\"}",
+      "signature": "5799486035cb2c5c1e6450be41e5e109d979b8aa1a23ca68a46a90a864033df7",
+      "header": "t=1786440166,v1=5799486035cb2c5c1e6450be41e5e109d979b8aa1a23ca68a46a90a864033df7"
+    },
+    {
+      "name": "unicode_body",
+      "secret": "whsec_5f4dcc3b5aa765d61d8327deb882cf99",
+      "timestamp": 1786440166,
+      "body": "{\"memo\":\"入金 €1,234\"}",
+      "signature": "d0cee744edbdd24346ec448cbcbeedbe61c47dba4e4ceb0894b84801faae0e69",
+      "header": "t=1786440166,v1=d0cee744edbdd24346ec448cbcbeedbe61c47dba4e4ceb0894b84801faae0e69"
+    },
+    {
+      "name": "signed_with_rotated_secret",
+      "secret": "whsec_0000000000000000000000000000000a",
+      "timestamp": 1786440166,
+      "body": "{\"txid\":\"0xabc#3\",\"tx_hash\":\"0xabc\",\"transfer_index\":3,\"address\":\"0xdead\",\"from_address\":\"0xbeef\",\"amount\":\"12.5\",\"raw_amount\":\"12500000000000000000\",\"status\":1,\"chain\":\"bsc\",\"chain_id\":\"56\",\"currency\":\"USDT\",\"token_id\":\"0x55d398326f99059ff775485246999027b3197955\",\"decimals\":18,\"block_height\":\"42\",\"block_time\":\"1786440166\",\"confirmations\":15,\"timestamp\":\"1756684800000\"}",
+      "signature": "ced8b80ed2bba8c5178f6f6fae80f07bd87a129deb05720942a449994da21ad4",
+      "header": "t=1786440166,v1=ced8b80ed2bba8c5178f6f6fae80f07bd87a129deb05720942a449994da21ad4"
+    },
+    {
+      "name": "unknown_parameter_is_ignored",
+      "secret": "whsec_5f4dcc3b5aa765d61d8327deb882cf99",
+      "timestamp": 1786440166,
+      "body": "{\"txid\":\"0xabc#3\",\"tx_hash\":\"0xabc\",\"transfer_index\":3,\"address\":\"0xdead\",\"from_address\":\"0xbeef\",\"amount\":\"12.5\",\"raw_amount\":\"12500000000000000000\",\"status\":1,\"chain\":\"bsc\",\"chain_id\":\"56\",\"currency\":\"USDT\",\"token_id\":\"0x55d398326f99059ff775485246999027b3197955\",\"decimals\":18,\"block_height\":\"42\",\"block_time\":\"1786440166\",\"confirmations\":15,\"timestamp\":\"1756684800000\"}",
+      "signature": "59ddb125533c45aea52c1d5c3689297286c37b3ce0a2f128931d6f9877b52a42",
+      "header": "t=1786440166,v1=59ddb125533c45aea52c1d5c3689297286c37b3ce0a2f128931d6f9877b52a42,v2=ffff"
+    }
+  ]
+}

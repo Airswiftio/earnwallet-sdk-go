@@ -1,0 +1,387 @@
+components:
+    schemas:
+        AllocateSeedReq:
+            properties:
+                external_ref:
+                    description: Opaque idempotency key defined by the caller; infra does not interpret it
+                    maxLength: 256
+                    minLength: 1
+                    type: string
+            required:
+                - external_ref
+            type: object
+        AllocateSeedRes:
+            properties:
+                external_ref:
+                    description: Echoed back so a retried request can be matched to its response
+                    type: string
+                seed:
+                    description: Global seed in [1, 2^32-1], shared across chains
+                    format: int64
+                    type: integer
+            required:
+                - external_ref
+                - seed
+            type: object
+        CreateWithdrawalReq:
+            properties:
+                amount:
+                    description: Decimal string; more precision than the token has is refused, not rounded
+                    type: string
+                chain:
+                    description: Chain name as configured, lower case
+                    type: string
+                external_id:
+                    description: Caller's order id; also the idempotency key
+                    maxLength: 64
+                    minLength: 1
+                    type: string
+                to_address:
+                    description: Destination address
+                    type: string
+                token_id:
+                    description: Token contract address; must be configured for withdrawal
+                    type: string
+            required:
+                - external_id
+                - chain
+                - token_id
+                - to_address
+                - amount
+            type: object
+        CreateWithdrawalRes:
+            properties:
+                external_id:
+                    type: string
+                status:
+                    type: string
+            required:
+                - external_id
+                - status
+            type: object
+        Error:
+            properties:
+                code:
+                    description: 0 on success; any other value is a business failure.
+                    type: integer
+                message:
+                    type: string
+            required:
+                - code
+                - message
+            type: object
+        GetAddressReq:
+            properties:
+                chain:
+                    description: Chain name as configured, lower case, e.g. bsc
+                    type: string
+                factory:
+                    description: Factory address; defaults to the chain's current factory
+                    type: string
+                seed:
+                    description: Global seed in [1, 2^32-1]
+                    format: int64
+                    minimum: 1
+                    type: integer
+            required:
+                - chain
+                - seed
+            type: object
+        GetAddressRes:
+            properties:
+                address:
+                    type: string
+                chain:
+                    type: string
+                factory:
+                    type: string
+                seed:
+                    format: int64
+                    type: integer
+            required:
+                - address
+                - chain
+                - factory
+                - seed
+            type: object
+        GetWithdrawalReq:
+            properties:
+                external_id:
+                    type: string
+            required:
+                - external_id
+            type: object
+        GetWithdrawalRes:
+            properties:
+                amount:
+                    type: string
+                chain:
+                    type: string
+                confirmed_at:
+                    format: date-time
+                    nullable: true
+                    type: string
+                created_at:
+                    format: date-time
+                    type: string
+                external_id:
+                    type: string
+                failed_reason:
+                    type: string
+                held_reason:
+                    type: string
+                status:
+                    type: string
+                to_address:
+                    type: string
+                token_id:
+                    type: string
+                tx_hash:
+                    type: string
+            required:
+                - amount
+                - chain
+                - confirmed_at
+                - created_at
+                - external_id
+                - failed_reason
+                - held_reason
+                - status
+                - to_address
+                - token_id
+                - tx_hash
+            type: object
+        ResolveAddressReq:
+            properties:
+                address:
+                    type: string
+                chain:
+                    type: string
+            required:
+                - chain
+                - address
+            type: object
+        ResolveAddressRes:
+            properties:
+                address:
+                    type: string
+                chain:
+                    type: string
+                factory:
+                    type: string
+                seed:
+                    format: int64
+                    type: integer
+            required:
+                - address
+                - chain
+                - factory
+                - seed
+            type: object
+info:
+    description: Deposit address allocation and payout submission.
+    title: EarnWallet API
+    version: 1.0.0
+openapi: 3.0.0
+paths:
+    /v1/addresses:
+        get:
+            operationId: GetAddress
+            parameters:
+                - description: Chain name as configured, lower case, e.g. bsc
+                  in: query
+                  name: chain
+                  required: true
+                  schema:
+                    description: Chain name as configured, lower case, e.g. bsc
+                    type: string
+                - description: Factory address; defaults to the chain's current factory
+                  in: query
+                  name: factory
+                  schema:
+                    description: Factory address; defaults to the chain's current factory
+                    type: string
+                - description: Global seed in [1, 2^32-1]
+                  in: query
+                  name: seed
+                  required: true
+                  schema:
+                    description: Global seed in [1, 2^32-1]
+                    format: int64
+                    type: integer
+            responses:
+                "200":
+                    content:
+                        application/json:
+                            schema:
+                                properties:
+                                    code:
+                                        description: 0 on success; any other value is a business failure.
+                                        type: integer
+                                    data:
+                                        $ref: '#/components/schemas/GetAddressRes'
+                                    message:
+                                        type: string
+                                required:
+                                    - code
+                                    - message
+                                type: object
+                    description: Success. code is 0 and data carries the result.
+                default:
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/Error'
+                    description: A business failure. HTTP stays 200; code is non-zero.
+            summary: 'Forward lookup: chain plus factory plus seed to address'
+            tags:
+                - Address
+    /v1/addresses/resolve:
+        get:
+            operationId: ResolveAddress
+            parameters:
+                - in: query
+                  name: chain
+                  required: true
+                  schema:
+                    type: string
+                - in: query
+                  name: address
+                  required: true
+                  schema:
+                    type: string
+            responses:
+                "200":
+                    content:
+                        application/json:
+                            schema:
+                                properties:
+                                    code:
+                                        description: 0 on success; any other value is a business failure.
+                                        type: integer
+                                    data:
+                                        $ref: '#/components/schemas/ResolveAddressRes'
+                                    message:
+                                        type: string
+                                required:
+                                    - code
+                                    - message
+                                type: object
+                    description: Success. code is 0 and data carries the result.
+                default:
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/Error'
+                    description: A business failure. HTTP stays 200; code is non-zero.
+            summary: 'Reverse lookup: chain plus address to seed'
+            tags:
+                - Address
+    /v1/seeds:
+        post:
+            operationId: AllocateSeed
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/AllocateSeedReq'
+                            description: ""
+            responses:
+                "200":
+                    content:
+                        application/json:
+                            schema:
+                                properties:
+                                    code:
+                                        description: 0 on success; any other value is a business failure.
+                                        type: integer
+                                    data:
+                                        $ref: '#/components/schemas/AllocateSeedRes'
+                                    message:
+                                        type: string
+                                required:
+                                    - code
+                                    - message
+                                type: object
+                    description: Success. code is 0 and data carries the result.
+                default:
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/Error'
+                    description: A business failure. HTTP stays 200; code is non-zero.
+            summary: Allocate the seed bound to an external reference
+            tags:
+                - Seed
+    /v1/withdrawals:
+        post:
+            operationId: CreateWithdrawal
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/CreateWithdrawalReq'
+                            description: ""
+            responses:
+                "200":
+                    content:
+                        application/json:
+                            schema:
+                                properties:
+                                    code:
+                                        description: 0 on success; any other value is a business failure.
+                                        type: integer
+                                    data:
+                                        $ref: '#/components/schemas/CreateWithdrawalRes'
+                                    message:
+                                        type: string
+                                required:
+                                    - code
+                                    - message
+                                type: object
+                    description: Success. code is 0 and data carries the result.
+                default:
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/Error'
+                    description: A business failure. HTTP stays 200; code is non-zero.
+            summary: Submit a payout order
+            tags:
+                - Withdrawal
+    /v1/withdrawals/{external_id}:
+        get:
+            operationId: GetWithdrawal
+            parameters:
+                - in: path
+                  name: external_id
+                  required: true
+                  schema:
+                    type: string
+            responses:
+                "200":
+                    content:
+                        application/json:
+                            schema:
+                                properties:
+                                    code:
+                                        description: 0 on success; any other value is a business failure.
+                                        type: integer
+                                    data:
+                                        $ref: '#/components/schemas/GetWithdrawalRes'
+                                    message:
+                                        type: string
+                                required:
+                                    - code
+                                    - message
+                                type: object
+                    description: Success. code is 0 and data carries the result.
+                default:
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/Error'
+                    description: A business failure. HTTP stays 200; code is non-zero.
+            summary: Read one payout order
+            tags:
+                - Withdrawal

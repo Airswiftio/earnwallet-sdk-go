@@ -1,0 +1,12 @@
+# Regenerate with:
+#   oapi-codegen --config oapi-codegen.yaml openapi.yaml
+#
+# The spec itself is produced by the service, not edited here:
+#   chainwallet openapi --out openapi.yaml
+package: earnwallet
+output: client.gen.go
+generate:
+  models: true
+  client: true
+output-options:
+  skip-prune: true
