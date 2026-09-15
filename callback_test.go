@@ -158,8 +158,8 @@ func TestDepositHandlerVerifiesBeforeDecoding(t *testing.T) {
 	handler := DepositHandler(at(c.Timestamp, Key{ID: "k", Secret: c.Secret}),
 		func(_ *http.Request, event DepositEvent) error {
 			called = true
-			if event.TxID != "0xabc#3" {
-				t.Errorf("TxID = %q", event.TxID)
+			if event.TxHash != "0xabc" {
+				t.Errorf("TxHash = %q", event.TxHash)
 			}
 			if event.Amount != "12.5" || event.RawAmount != "12500000000000000000" {
 				t.Errorf("amounts arrived as %q / %q", event.Amount, event.RawAmount)
@@ -316,7 +316,7 @@ func TestWithdrawalEventsCarryTheirOutcomeAsAType(t *testing.T) {
 			// Event and Status must agree; a receiver switching on one and
 			// crediting on the other would otherwise diverge.
 			if got.Succeeded() != (want == EventWithdrawalSucceeded) {
-				t.Errorf("Event %q disagrees with status %d", got.Event, got.Status)
+				t.Errorf("Succeeded() disagrees with Event %q", got.Event)
 			}
 		})
 	}

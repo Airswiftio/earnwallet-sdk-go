@@ -23,7 +23,7 @@ func ExampleDepositHandler() {
 		func(r *http.Request, event earnwallet.DepositEvent) error {
 			// Key on TxID: delivery is at-least-once, so this runs again if the
 			// reply is lost.
-			return credit(r.Context(), event.TxID, event.Address, event.Amount)
+			return credit(r.Context(), event.EventID, event.Address, event.Amount)
 		}))
 
 	mux.Handle("/callbacks/earnwallet/withdraw", earnwallet.WithdrawalHandler(verifier,
@@ -31,7 +31,7 @@ func ExampleDepositHandler() {
 			if !event.Succeeded() {
 				return settleFailure(r.Context(), event.ExternalID, event.FailedReason)
 			}
-			return settleSuccess(r.Context(), event.ExternalID, event.TxID)
+			return settleSuccess(r.Context(), event.ExternalID, event.EventID)
 		}))
 }
 

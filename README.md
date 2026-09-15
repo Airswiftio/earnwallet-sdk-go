@@ -47,10 +47,11 @@ and the signature stops matching. The handlers above read the body first and
 verify before decoding; if you verify by hand, do the same.
 
 **Be idempotent.** Delivery is at-least-once. A callback that was processed will
-arrive again if the response was lost. Key deposits on `DepositEvent.TxID` and
-payouts on `WithdrawalEvent.ExternalID`. `TxID` is `<tx hash>#<transfer index>`
-rather than a bare hash, because one transaction can pay several deposit
-addresses and bare hashes would collide.
+arrive again if the response was lost. Dedupe on `EventID` — every event has one, it is stable across
+redeliveries, and the reconciliation endpoints report the same value.
+
+Do **not** dedupe deposits on `TxHash`: one transaction can pay several deposit
+addresses, so the hash is not unique. `EventID` carries the transfer index too.
 
 **Answer 2xx only when you are done.** Anything else is retried with backoff for
 about a day, after which the event is parked for an operator and can be replayed
@@ -58,6 +59,10 @@ by hand. Return an error from your function when a retry could genuinely
 succeed — a database that is temporarily down. Do not return one for an event
 you have permanently rejected: that buys a day of pointless retries and a dead
 letter someone has to look at.
+
+**Times are unix seconds.** Both `BlockTime` and `Timestamp`, one unit
+throughout. `Timestamp` is written once when the deposit is credited and
+replayed unchanged, so it does not drift across retries.
 
 **Treat amounts as strings.** `Amount` and `RawAmount` are decimal strings. A
 `float64` cannot hold an 18-decimal token amount without losing the low digits.

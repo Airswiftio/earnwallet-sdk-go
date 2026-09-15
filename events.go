@@ -1,17 +1,5 @@
 package earnwallet
 
-// StatusDepositConfirmed is the only status a deposit callback carries. An
-// event exists because the deposit reached its chain's confirmation depth and
-// survived reorg detection, so there is no pending or failed variant.
-const StatusDepositConfirmed int64 = 1
-
-// Terminal payout outcomes. Only these two are delivered: an intermediate
-// "broadcast" event would be a delivery that changes nothing.
-const (
-	StatusWithdrawalSucceeded int64 = 0
-	StatusWithdrawalFailed    int64 = 2
-)
-
 // NativeTransferIndex marks a deposit that carries no token log - a plain
 // value transfer. It keeps (TxHash, TransferIndex) distinct from a token
 // transfer at index 0 of the same transaction.
@@ -28,10 +16,9 @@ const (
 
 // DepositEvent reports a confirmed incoming transfer.
 //
-// TxID is "<tx hash>#<transfer index>", not a bare hash, and it is the value to
-// key idempotency on. One transaction can pay several deposit addresses; a bare
-// hash would make those collide and the second be dropped as already seen.
-// TxHash carries the plain hash for chain explorer lookups.
+// TxHash is the plain transaction hash and is NOT unique on its own: one
+// transaction can pay several deposit addresses. Dedupe on EventID, which
+// carries the transfer index as well.
 //
 // Amount and RawAmount are decimal strings, never numbers: a float64 cannot
 // hold an 18-decimal token amount without losing the low digits. Decimals
@@ -47,9 +34,9 @@ const (
 // FromAddress is the on-chain sender, which is a different thing and is what
 // risk and compliance need.
 //
-// BlockTime is unix seconds; Timestamp is unix milliseconds. Timestamp is
-// written once when the deposit is credited and replayed unchanged on every
-// redelivery, so it does not drift across retries.
+// BlockTime and Timestamp are both unix seconds. Timestamp is written once
+// when the deposit is credited and replayed unchanged on every redelivery, so
+// it does not drift across retries.
 type DepositEvent struct {
 	// Event is always EventDepositConfirmed today. EventID is stable across
 	// redeliveries and is the one key to dedupe on whatever the type: the same
@@ -58,14 +45,12 @@ type DepositEvent struct {
 	Event   string `json:"event"`
 	EventID string `json:"event_id"`
 
-	TxID          string `json:"txid"`
 	TxHash        string `json:"tx_hash"`
 	TransferIndex int64  `json:"transfer_index"`
 	Address       string `json:"address"`
 	FromAddress   string `json:"from_address"`
 	Amount        string `json:"amount"`
 	RawAmount     string `json:"raw_amount"`
-	Status        int64  `json:"status"`
 	Chain         string `json:"chain"`
 	Currency      string `json:"currency"`
 	TokenID       string `json:"token_id"`
@@ -85,7 +70,7 @@ func (e DepositEvent) IsNative() bool { return e.TransferIndex == NativeTransfer
 // ExternalID echoes back the external_id the order was submitted with,
 // unchanged, and is how the order is looked up.
 //
-// TxID is empty on failure: a payout that never broadcast has no hash.
+// TxHash is empty on failure: a payout that never broadcast has no hash.
 // FailedReason then carries why, and is absent on success.
 type WithdrawalEvent struct {
 	// Event is EventWithdrawalSucceeded or EventWithdrawalFailed. A payout
@@ -94,9 +79,7 @@ type WithdrawalEvent struct {
 	EventID string `json:"event_id"`
 
 	ExternalID   string `json:"external_id"`
-	Status       int64  `json:"status"`
 	Amount       string `json:"amount"`
-	TxID         string `json:"txid"`
 	Chain        string `json:"chain"`
 	Currency     string `json:"currency"`
 	TokenID      string `json:"token_id"`
@@ -105,5 +88,6 @@ type WithdrawalEvent struct {
 	FailedReason string `json:"failed_reason,omitempty"`
 }
 
-// Succeeded reports whether the payout moved funds.
-func (e WithdrawalEvent) Succeeded() bool { return e.Status == StatusWithdrawalSucceeded }
+// Succeeded reports whether the payout moved funds. Event is the only thing
+// that says so; there is no second status field to disagree with it.
+func (e WithdrawalEvent) Succeeded() bool { return e.Event == EventWithdrawalSucceeded }
