@@ -13,6 +13,12 @@ describes them.
 
 ## Receiving callbacks
 
+Every callback carries `event` and `event_id`. Dispatch on `event`
+(`deposit.confirmed`, `withdrawal.succeeded`, `withdrawal.failed`) rather than
+on which URL it arrived at, and dedupe on `event_id` — it is stable across
+redeliveries and the reconciliation endpoint reports the same value, so
+catching up after an outage is a set difference rather than re-derived keys.
+
 Two endpoints, one for deposits and one for payouts. Both are signed with
 HMAC-SHA256 over the raw body; the signature travels in `X-Polyflow-Signature`
 and there is no signature field inside the body.
@@ -90,6 +96,17 @@ order, err := client.CreateWithdrawal(ctx, earnwallet.CreateWithdrawalReq{
     Amount:     "100",
 })
 ```
+
+Ask `ListChains` what this deployment supports rather than hardcoding chain
+names, token addresses or limits — they are configuration and differ between
+environments. A token reported with `withdrawable: false` has no configured
+ceiling, and on an outbound path that means not allowed, never unbounded.
+
+`ListDeposits` and `ListWithdrawals` exist for recovery, not as a second
+delivery path: a receiver that was down long enough for its events to
+dead-letter can catch up by itself instead of asking the custodian's operator
+to replay them.
+
 
 Every response travels in a `{code, message, data}` envelope, and a business
 failure arrives as **HTTP 200 with a non-zero code** rather than as an error

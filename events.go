@@ -17,6 +17,15 @@ const (
 // transfer at index 0 of the same transaction.
 const NativeTransferIndex int64 = -1
 
+// Event names. Dispatch on these rather than on which endpoint the request
+// arrived at: a fourth event type is additive, a fourth endpoint is a
+// deployment.
+const (
+	EventDepositConfirmed    = "deposit.confirmed"
+	EventWithdrawalSucceeded = "withdrawal.succeeded"
+	EventWithdrawalFailed    = "withdrawal.failed"
+)
+
 // DepositEvent reports a confirmed incoming transfer.
 //
 // TxID is "<tx hash>#<transfer index>", not a bare hash, and it is the value to
@@ -37,6 +46,13 @@ const NativeTransferIndex int64 = -1
 // written once when the deposit is credited and replayed unchanged on every
 // redelivery, so it does not drift across retries.
 type DepositEvent struct {
+	// Event is always EventDepositConfirmed today. EventID is stable across
+	// redeliveries and is the one key to dedupe on whatever the type: the same
+	// value appears on the reconciliation endpoint, so catching up after an
+	// outage is a set difference rather than re-derived keys.
+	Event   string `json:"event"`
+	EventID string `json:"event_id"`
+
 	TxID          string `json:"txid"`
 	TxHash        string `json:"tx_hash"`
 	TransferIndex int64  `json:"transfer_index"`
@@ -68,6 +84,11 @@ func (e DepositEvent) IsNative() bool { return e.TransferIndex == NativeTransfer
 // TxID is empty on failure: a payout that never broadcast has no hash.
 // FailedReason then carries why, and is absent on success.
 type WithdrawalEvent struct {
+	// Event is EventWithdrawalSucceeded or EventWithdrawalFailed. A payout
+	// refused by an operator arrives as failed, with the reason.
+	Event   string `json:"event"`
+	EventID string `json:"event_id"`
+
 	ThirdPartyID string `json:"third_party_id"`
 	Status       int64  `json:"status"`
 	Amount       string `json:"amount"`

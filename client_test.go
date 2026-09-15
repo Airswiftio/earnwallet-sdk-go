@@ -88,28 +88,26 @@ func TestGetAddressSendsItsParameters(t *testing.T) {
 	if got := query.Get("seed"); got != "1001" {
 		t.Errorf("seed = %q", got)
 	}
-	// An absent factory means "the chain's current one". Sending it empty is a
-	// different request, and an invalid one.
-	if _, present := query["factory"]; present {
-		t.Error("factory was sent although it was not set")
-	}
 }
 
-func TestGetAddressSendsFactoryWhenPinned(t *testing.T) {
-	var query url.Values
+// Which factory is current is the service's concern. The parameter was removed
+// from the tenant surface deliberately: pinning an older one yields an address
+// the service may no longer watch. The factory that was used still comes back.
+func TestTheFactoryIsReportedButNotChosen(t *testing.T) {
 	server := stub(t, func(w http.ResponseWriter, r *http.Request) {
-		query = r.URL.Query()
-		writeEnvelope(w, 0, "", GetAddressRes{})
+		if _, present := r.URL.Query()["factory"]; present {
+			t.Error("a factory was sent; the caller must not be able to pin one")
+		}
+		writeEnvelope(w, 0, "", GetAddressRes{Address: "0xabc", Factory: "0xd707"})
 	})
 	client := dial(t, server.URL)
 
-	factory := "0xd7073a2a1884b66852726fed2b9a8511095e3398"
-	if _, err := client.GetAddress(context.Background(),
-		GetAddressParams{Chain: "bsc", Seed: 1, Factory: &factory}); err != nil {
+	res, err := client.GetAddress(context.Background(), GetAddressParams{Chain: "bsc", Seed: 1})
+	if err != nil {
 		t.Fatal(err)
 	}
-	if got := query.Get("factory"); got != factory {
-		t.Errorf("factory = %q, want %q", got, factory)
+	if res.Factory == "" {
+		t.Error("the factory that was used must still be reported")
 	}
 }
 

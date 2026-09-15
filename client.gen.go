@@ -24,6 +24,22 @@ type AllocateSeedRes struct {
 	Seed int64 `json:"seed"`
 }
 
+// Chain defines model for Chain.
+type Chain struct {
+	// Chain Name to pass as the chain parameter
+	Chain *string `json:"chain,omitempty"`
+
+	// ChainId Value echoed as chain_id in callbacks
+	ChainId *string `json:"chain_id,omitempty"`
+
+	// ChainType evm, svm or tvm; decides the address format
+	ChainType *string `json:"chain_type,omitempty"`
+
+	// Confirmations Depth a deposit must reach before its callback is sent
+	Confirmations *int64   `json:"confirmations,omitempty"`
+	Tokens        *[]Token `json:"tokens,omitempty"`
+}
+
 // CreateWithdrawalReq defines model for CreateWithdrawalReq.
 type CreateWithdrawalReq struct {
 	// Amount Decimal string; more precision than the token has is refused, not rounded
@@ -48,6 +64,26 @@ type CreateWithdrawalRes struct {
 	Status     string `json:"status"`
 }
 
+// Deposit defines model for Deposit.
+type Deposit struct {
+	Address       *string    `json:"address,omitempty"`
+	Amount        *string    `json:"amount,omitempty"`
+	BlockHeight   *string    `json:"block_height,omitempty"`
+	BlockTime     *string    `json:"block_time,omitempty"`
+	Chain         *string    `json:"chain,omitempty"`
+	ChainId       *string    `json:"chain_id,omitempty"`
+	ConfirmedAt   *time.Time `json:"confirmed_at,omitempty"`
+	Currency      *string    `json:"currency,omitempty"`
+	Decimals      *uint8     `json:"decimals,omitempty"`
+	EventId       *string    `json:"event_id,omitempty"`
+	FromAddress   *string    `json:"from_address,omitempty"`
+	RawAmount     *string    `json:"raw_amount,omitempty"`
+	TokenId       *string    `json:"token_id,omitempty"`
+	TransferIndex *int64     `json:"transfer_index,omitempty"`
+	TxHash        *string    `json:"tx_hash,omitempty"`
+	Txid          *string    `json:"txid,omitempty"`
+}
+
 // Error defines model for Error.
 type Error struct {
 	// Code 0 on success; any other value is a business failure.
@@ -59,9 +95,6 @@ type Error struct {
 type GetAddressReq struct {
 	// Chain Chain name as configured, lower case, e.g. bsc
 	Chain string `json:"chain"`
-
-	// Factory Factory address; defaults to the chain's current factory
-	Factory *string `json:"factory,omitempty"`
 
 	// Seed Global seed in [1, 2^32-1]
 	Seed int64 `json:"seed"`
@@ -95,6 +128,57 @@ type GetWithdrawalRes struct {
 	TxHash       string     `json:"tx_hash"`
 }
 
+// ListChainsReq defines model for ListChainsReq.
+type ListChainsReq = map[string]interface{}
+
+// ListChainsRes defines model for ListChainsRes.
+type ListChainsRes struct {
+	Chains []Chain `json:"chains"`
+}
+
+// ListDepositsReq defines model for ListDepositsReq.
+type ListDepositsReq struct {
+	// Chain Limit to one chain
+	Chain *string `json:"chain,omitempty"`
+	Page  *int64  `json:"page,omitempty"`
+
+	// Since Credited at or after this instant, RFC3339
+	Since *time.Time `json:"since"`
+	Size  *int64     `json:"size,omitempty"`
+
+	// Until Credited strictly before this instant, RFC3339
+	Until *time.Time `json:"until"`
+}
+
+// ListDepositsRes defines model for ListDepositsRes.
+type ListDepositsRes struct {
+	Items []Deposit `json:"items"`
+	Total int64     `json:"total"`
+}
+
+// ListWithdrawalsReq defines model for ListWithdrawalsReq.
+type ListWithdrawalsReq struct {
+	// Chain Limit to one chain
+	Chain *string `json:"chain,omitempty"`
+	Page  *int64  `json:"page,omitempty"`
+
+	// Since Created at or after this instant, RFC3339
+	Since *time.Time `json:"since"`
+	Size  *int64     `json:"size,omitempty"`
+
+	// Status accepted, held, planned, confirmed or failed
+	Status *string `json:"status,omitempty"`
+
+	// Until Created strictly before this instant, RFC3339
+	Until *time.Time `json:"until"`
+}
+
+// ListWithdrawalsRes defines model for ListWithdrawalsRes.
+type ListWithdrawalsRes struct {
+	Items []Withdrawal `json:"items"`
+	Total int64        `json:"total"`
+}
+
 // ResolveAddressReq defines model for ResolveAddressReq.
 type ResolveAddressReq struct {
 	Address string `json:"address"`
@@ -109,13 +193,42 @@ type ResolveAddressRes struct {
 	Seed    int64  `json:"seed"`
 }
 
+// Token defines model for Token.
+type Token struct {
+	// Decimals amount == raw_amount / 10^decimals
+	Decimals *uint8 `json:"decimals,omitempty"`
+
+	// MaxDailyWithdrawal Rolling 24h ceiling; empty when unset
+	MaxDailyWithdrawal *string `json:"max_daily_withdrawal,omitempty"`
+
+	// MaxWithdrawal Per-order ceiling as a decimal string; empty when not withdrawable
+	MaxWithdrawal *string `json:"max_withdrawal,omitempty"`
+	Symbol        *string `json:"symbol,omitempty"`
+
+	// TokenId Value to pass as token_id; the contract address, or empty for the native asset
+	TokenId      *string `json:"token_id,omitempty"`
+	Withdrawable *bool   `json:"withdrawable,omitempty"`
+}
+
+// Withdrawal defines model for Withdrawal.
+type Withdrawal struct {
+	Amount       *string    `json:"amount,omitempty"`
+	Chain        *string    `json:"chain,omitempty"`
+	ConfirmedAt  *time.Time `json:"confirmed_at"`
+	CreatedAt    *time.Time `json:"created_at,omitempty"`
+	ExternalId   *string    `json:"external_id,omitempty"`
+	FailedReason *string    `json:"failed_reason,omitempty"`
+	HeldReason   *string    `json:"held_reason,omitempty"`
+	Status       *string    `json:"status,omitempty"`
+	ToAddress    *string    `json:"to_address,omitempty"`
+	TokenId      *string    `json:"token_id,omitempty"`
+	TxHash       *string    `json:"tx_hash,omitempty"`
+}
+
 // GetAddressParams defines parameters for GetAddress.
 type GetAddressParams struct {
 	// Chain Chain name as configured, lower case, e.g. bsc
 	Chain string `form:"chain" json:"chain"`
-
-	// Factory Factory address; defaults to the chain's current factory
-	Factory *string `form:"factory,omitempty" json:"factory,omitempty"`
 
 	// Seed Global seed in [1, 2^32-1]
 	Seed int64 `form:"seed" json:"seed"`
@@ -127,13 +240,44 @@ type ResolveAddressParams struct {
 	Address string `form:"address" json:"address"`
 }
 
+// ListDepositsParams defines parameters for ListDeposits.
+type ListDepositsParams struct {
+	// Chain Limit to one chain
+	Chain *string `form:"chain,omitempty" json:"chain,omitempty"`
+
+	// Since Credited at or after this instant, RFC3339
+	Since *time.Time `form:"since,omitempty" json:"since,omitempty"`
+
+	// Until Credited strictly before this instant, RFC3339
+	Until *time.Time `form:"until,omitempty" json:"until,omitempty"`
+	Page  *int64     `form:"page,omitempty" json:"page,omitempty"`
+	Size  *int64     `form:"size,omitempty" json:"size,omitempty"`
+}
+
+// ListWithdrawalsParams defines parameters for ListWithdrawals.
+type ListWithdrawalsParams struct {
+	// Chain Limit to one chain
+	Chain *string `form:"chain,omitempty" json:"chain,omitempty"`
+
+	// Status accepted, held, planned, confirmed or failed
+	Status *string `form:"status,omitempty" json:"status,omitempty"`
+
+	// Since Created at or after this instant, RFC3339
+	Since *time.Time `form:"since,omitempty" json:"since,omitempty"`
+
+	// Until Created strictly before this instant, RFC3339
+	Until *time.Time `form:"until,omitempty" json:"until,omitempty"`
+	Page  *int64     `form:"page,omitempty" json:"page,omitempty"`
+	Size  *int64     `form:"size,omitempty" json:"size,omitempty"`
+}
+
 // AllocateSeedJSONRequestBody defines body for AllocateSeed for application/json ContentType.
 type AllocateSeedJSONRequestBody = AllocateSeedReq
 
 // CreateWithdrawalJSONRequestBody defines body for CreateWithdrawal for application/json ContentType.
 type CreateWithdrawalJSONRequestBody = CreateWithdrawalReq
 
-// GetAddress forward lookup: chain plus factory plus seed to address.
+// GetAddress forward lookup: chain plus seed to address.
 //
 // A non-zero code in the reply comes back as *APIError. Any other error is a
 // transport failure, and the request may still have been served.
@@ -142,9 +286,6 @@ func (c *Client) GetAddress(ctx context.Context, params GetAddressParams) (*GetA
 
 	query := url.Values{}
 	query.Set("chain", formatParam(params.Chain))
-	if params.Factory != nil {
-		query.Set("factory", formatParam(*params.Factory))
-	}
 	query.Set("seed", formatParam(params.Seed))
 
 	return send[GetAddressRes](ctx, c, "GET", path, query, nil)
@@ -162,6 +303,43 @@ func (c *Client) ResolveAddress(ctx context.Context, params ResolveAddressParams
 	query.Set("address", formatParam(params.Address))
 
 	return send[ResolveAddressRes](ctx, c, "GET", path, query, nil)
+}
+
+// ListChains list the chains and tokens this deployment supports.
+//
+// A non-zero code in the reply comes back as *APIError. Any other error is a
+// transport failure, and the request may still have been served.
+func (c *Client) ListChains(ctx context.Context) (*ListChainsRes, error) {
+	path := "/v1/chains"
+
+	return send[ListChainsRes](ctx, c, "GET", path, nil, nil)
+}
+
+// ListDeposits list credited deposits for reconciliation.
+//
+// A non-zero code in the reply comes back as *APIError. Any other error is a
+// transport failure, and the request may still have been served.
+func (c *Client) ListDeposits(ctx context.Context, params ListDepositsParams) (*ListDepositsRes, error) {
+	path := "/v1/deposits"
+
+	query := url.Values{}
+	if params.Chain != nil {
+		query.Set("chain", formatParam(*params.Chain))
+	}
+	if params.Since != nil {
+		query.Set("since", formatParam(*params.Since))
+	}
+	if params.Until != nil {
+		query.Set("until", formatParam(*params.Until))
+	}
+	if params.Page != nil {
+		query.Set("page", formatParam(*params.Page))
+	}
+	if params.Size != nil {
+		query.Set("size", formatParam(*params.Size))
+	}
+
+	return send[ListDepositsRes](ctx, c, "GET", path, query, nil)
 }
 
 // AllocateSeed allocate the seed bound to an external reference.
@@ -182,6 +360,36 @@ func (c *Client) CreateWithdrawal(ctx context.Context, body CreateWithdrawalJSON
 	path := "/v1/withdrawals"
 
 	return send[CreateWithdrawalRes](ctx, c, "POST", path, nil, body)
+}
+
+// ListWithdrawals list payout orders for reconciliation.
+//
+// A non-zero code in the reply comes back as *APIError. Any other error is a
+// transport failure, and the request may still have been served.
+func (c *Client) ListWithdrawals(ctx context.Context, params ListWithdrawalsParams) (*ListWithdrawalsRes, error) {
+	path := "/v1/withdrawals/list"
+
+	query := url.Values{}
+	if params.Chain != nil {
+		query.Set("chain", formatParam(*params.Chain))
+	}
+	if params.Status != nil {
+		query.Set("status", formatParam(*params.Status))
+	}
+	if params.Since != nil {
+		query.Set("since", formatParam(*params.Since))
+	}
+	if params.Until != nil {
+		query.Set("until", formatParam(*params.Until))
+	}
+	if params.Page != nil {
+		query.Set("page", formatParam(*params.Page))
+	}
+	if params.Size != nil {
+		query.Set("size", formatParam(*params.Size))
+	}
+
+	return send[ListWithdrawalsRes](ctx, c, "GET", path, query, nil)
 }
 
 // GetWithdrawal read one payout order.

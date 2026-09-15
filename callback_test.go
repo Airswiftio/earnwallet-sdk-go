@@ -270,3 +270,54 @@ func post(handler http.Handler, header, body string) *httptest.ResponseRecorder 
 	handler.ServeHTTP(rec, req)
 	return rec
 }
+
+// A receiver dispatches on Event rather than on which endpoint the request
+// arrived at, and dedupes on EventID whatever the type. Both must survive
+// decoding or the SDK has published fields that do not arrive.
+func TestEventFieldsSurviveDecoding(t *testing.T) {
+	c := caseNamed(t, "deposit")
+	var got DepositEvent
+	handler := DepositHandler(at(c.Timestamp, Key{ID: "k", Secret: c.Secret}),
+		func(_ *http.Request, event DepositEvent) error {
+			got = event
+			return nil
+		})
+	if rec := post(handler, c.Header, c.Body); rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, body %s", rec.Code, rec.Body)
+	}
+	if got.Event != EventDepositConfirmed {
+		t.Errorf("Event = %q, want %q", got.Event, EventDepositConfirmed)
+	}
+	if got.EventID == "" {
+		t.Error("EventID is the dedupe key and must arrive")
+	}
+}
+
+func TestWithdrawalEventsCarryTheirOutcomeAsAType(t *testing.T) {
+	cases := map[string]string{
+		"withdrawal_success": EventWithdrawalSucceeded,
+		"withdrawal_failed":  EventWithdrawalFailed,
+	}
+	for name, want := range cases {
+		t.Run(name, func(t *testing.T) {
+			c := caseNamed(t, name)
+			var got WithdrawalEvent
+			handler := WithdrawalHandler(at(c.Timestamp, Key{ID: "k", Secret: c.Secret}),
+				func(_ *http.Request, event WithdrawalEvent) error {
+					got = event
+					return nil
+				})
+			if rec := post(handler, c.Header, c.Body); rec.Code != http.StatusOK {
+				t.Fatalf("status = %d", rec.Code)
+			}
+			if got.Event != want {
+				t.Errorf("Event = %q, want %q", got.Event, want)
+			}
+			// Event and Status must agree; a receiver switching on one and
+			// crediting on the other would otherwise diverge.
+			if got.Succeeded() != (want == EventWithdrawalSucceeded) {
+				t.Errorf("Event %q disagrees with status %d", got.Event, got.Status)
+			}
+		})
+	}
+}
