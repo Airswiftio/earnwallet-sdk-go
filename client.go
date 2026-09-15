@@ -46,6 +46,21 @@ func WithHTTPClient(doer *http.Client) Option {
 	}
 }
 
+// WithAPIKey sends the tenant credential every /v1 route requires.
+//
+// The key is not recoverable from the service: it stores only a hash, so this
+// is the copy that matters. Keep it out of source and out of logs - anything
+// that can read it can submit a payout.
+func WithAPIKey(key string) Option {
+	return WithRequestEditor(func(r *http.Request) error {
+		if strings.TrimSpace(key) == "" {
+			return fmt.Errorf("earnwallet: the api key is empty")
+		}
+		r.Header.Set("Authorization", "Bearer "+key)
+		return nil
+	})
+}
+
 // WithRequestEditor appends an editor. Editors run in the order they were added.
 func WithRequestEditor(edit RequestEditor) Option {
 	return func(c *Client) {

@@ -7,7 +7,6 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
-	"net/url"
 	"os"
 	"reflect"
 	"regexp"
@@ -51,66 +50,6 @@ func TestNewClientRejectsUnusableBaseURLs(t *testing.T) {
 	}
 }
 
-func TestTrailingSlashDoesNotDoubleUp(t *testing.T) {
-	var path string
-	server := stub(t, func(w http.ResponseWriter, r *http.Request) {
-		path = r.URL.Path
-		writeEnvelope(w, 0, "", GetAddressRes{Address: "0x1"})
-	})
-	client := dial(t, server.URL+"/")
-
-	if _, err := client.GetAddress(context.Background(), GetAddressParams{Chain: "bsc", Seed: 1}); err != nil {
-		t.Fatal(err)
-	}
-	if path != "/v1/addresses" {
-		t.Errorf("path = %q, want /v1/addresses", path)
-	}
-}
-
-func TestGetAddressSendsItsParameters(t *testing.T) {
-	var query url.Values
-	server := stub(t, func(w http.ResponseWriter, r *http.Request) {
-		query = r.URL.Query()
-		writeEnvelope(w, 0, "", GetAddressRes{Address: "0xabc", Chain: "bsc", Seed: 1001})
-	})
-	client := dial(t, server.URL)
-
-	res, err := client.GetAddress(context.Background(), GetAddressParams{Chain: "bsc", Seed: 1001})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if res.Address != "0xabc" {
-		t.Errorf("Address = %q", res.Address)
-	}
-	if got := query.Get("chain"); got != "bsc" {
-		t.Errorf("chain = %q", got)
-	}
-	if got := query.Get("seed"); got != "1001" {
-		t.Errorf("seed = %q", got)
-	}
-}
-
-// Which factory is current is the service's concern. The parameter was removed
-// from the tenant surface deliberately: pinning an older one yields an address
-// the service may no longer watch. The factory that was used still comes back.
-func TestTheFactoryIsReportedButNotChosen(t *testing.T) {
-	server := stub(t, func(w http.ResponseWriter, r *http.Request) {
-		if _, present := r.URL.Query()["factory"]; present {
-			t.Error("a factory was sent; the caller must not be able to pin one")
-		}
-		writeEnvelope(w, 0, "", GetAddressRes{Address: "0xabc", Factory: "0xd707"})
-	})
-	client := dial(t, server.URL)
-
-	res, err := client.GetAddress(context.Background(), GetAddressParams{Chain: "bsc", Seed: 1})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if res.Factory == "" {
-		t.Error("the factory that was used must still be reported")
-	}
-}
-
 // A business failure arrives as HTTP 200. Reading the status line would call it
 // a success.
 func TestABusinessFailureIsAnError(t *testing.T) {
@@ -141,7 +80,7 @@ func TestANonEnvelopeBodyNamesWhatArrived(t *testing.T) {
 	})
 	client := dial(t, server.URL)
 
-	_, err := client.GetWithdrawal(context.Background(), "wd-1")
+	_, err := client.GetWithdrawal(context.Background(), GetWithdrawalReq{ExternalId: "wd-1"})
 	if err == nil {
 		t.Fatal("a gateway error page was accepted")
 	}
@@ -193,69 +132,19 @@ func TestCreateWithdrawalPostsTheOrder(t *testing.T) {
 	}
 }
 
-// The external id goes in the path, so a value containing slashes must not be
-// able to reach into the route. It arrives as one segment or not at all.
-func TestExternalIdIsEscapedIntoThePath(t *testing.T) {
-	const id = "wd/../../admin"
-
-	var escaped, decoded string
-	server := stub(t, func(w http.ResponseWriter, r *http.Request) {
-		escaped, decoded = r.URL.EscapedPath(), r.URL.Path
-		writeEnvelope(w, 0, "", GetWithdrawalRes{})
-	})
-	client := dial(t, server.URL)
-
-	if _, err := client.GetWithdrawal(context.Background(), id); err != nil {
-		t.Fatal(err)
-	}
-	if want := "/v1/withdrawals/" + url.PathEscape(id); escaped != want {
-		t.Errorf("escaped path = %q, want %q", escaped, want)
-	}
-	// Decoded, it is still one id under the collection rather than a walk out
-	// of it.
-	if want := "/v1/withdrawals/" + id; decoded != want {
-		t.Errorf("decoded path = %q, want %q", decoded, want)
-	}
-}
-
-// An empty id would address the collection rather than an order - a different
-// request, not a failing one - so it has to be refused before it is sent.
-func TestABlankPathParameterIsRefusedBeforeSending(t *testing.T) {
-	reached := false
-	server := stub(t, func(w http.ResponseWriter, r *http.Request) {
-		reached = true
-		writeEnvelope(w, 0, "", GetWithdrawalRes{})
-	})
-	client := dial(t, server.URL)
-
-	for _, id := range []string{"", "   ", "	"} {
-		_, err := client.GetWithdrawal(context.Background(), id)
-		if err == nil {
-			t.Errorf("GetWithdrawal(%q) was sent", id)
-			continue
-		}
-		if !strings.Contains(err.Error(), "external_id") {
-			t.Errorf("err = %v, want it to name the parameter", err)
-		}
-	}
-	if reached {
-		t.Error("a request with no id reached the server")
-	}
-}
-
 // The seam auth will land on, whichever form it takes.
 func TestRequestEditorsRunInOrder(t *testing.T) {
 	var seen []string
 	server := stub(t, func(w http.ResponseWriter, r *http.Request) {
 		seen = r.Header.Values("X-Step")
-		writeEnvelope(w, 0, "", AllocateSeedRes{Seed: 7})
+		writeEnvelope(w, 0, "", GetWalletRes{Seed: 7, Chain: "bsc", Address: "0xabc"})
 	})
 	client := dial(t, server.URL,
 		WithRequestEditor(func(r *http.Request) error { r.Header.Add("X-Step", "first"); return nil }),
 		WithRequestEditor(func(r *http.Request) error { r.Header.Add("X-Step", "second"); return nil }),
 	)
 
-	if _, err := client.AllocateSeed(context.Background(), AllocateSeedReq{ExternalRef: "ref"}); err != nil {
+	if _, err := client.GetWallet(context.Background(), GetWalletReq{Chain: "bsc"}); err != nil {
 		t.Fatal(err)
 	}
 	if len(seen) != 2 || seen[0] != "first" || seen[1] != "second" {
@@ -267,12 +156,12 @@ func TestAFailingEditorStopsTheRequest(t *testing.T) {
 	sent := false
 	server := stub(t, func(w http.ResponseWriter, r *http.Request) {
 		sent = true
-		writeEnvelope(w, 0, "", AllocateSeedRes{})
+		writeEnvelope(w, 0, "", GetWalletRes{})
 	})
 	client := dial(t, server.URL,
 		WithRequestEditor(func(*http.Request) error { return errors.New("no credential") }))
 
-	if _, err := client.AllocateSeed(context.Background(), AllocateSeedReq{ExternalRef: "ref"}); err == nil {
+	if _, err := client.GetWallet(context.Background(), GetWalletReq{Chain: "bsc"}); err == nil {
 		t.Fatal("the request went out although the editor failed")
 	}
 	if sent {
@@ -289,7 +178,7 @@ func TestNeverConfirmedStaysNil(t *testing.T) {
 	})
 	client := dial(t, server.URL)
 
-	res, err := client.GetWithdrawal(context.Background(), "wd-1")
+	res, err := client.GetWithdrawal(context.Background(), GetWithdrawalReq{ExternalId: "wd-1"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -345,25 +234,6 @@ func TestFormatParam(t *testing.T) {
 	}
 }
 
-// A seed is documented as fitting in 2^32-1. Rendering it through a float would
-// round the high end, so it must go out exactly.
-func TestLargeSeedSurvivesTheQueryString(t *testing.T) {
-	var query url.Values
-	server := stub(t, func(w http.ResponseWriter, r *http.Request) {
-		query = r.URL.Query()
-		writeEnvelope(w, 0, "", GetAddressRes{})
-	})
-	client := dial(t, server.URL)
-
-	if _, err := client.GetAddress(context.Background(),
-		GetAddressParams{Chain: "bsc", Seed: 4294967295}); err != nil {
-		t.Fatal(err)
-	}
-	if got := query.Get("seed"); got != "4294967295" {
-		t.Errorf("seed = %q, want it exact", got)
-	}
-}
-
 func TestCheckPathRejectsIncompleteRoutes(t *testing.T) {
 	for _, path := range []string{"/v1/withdrawals/{external_id}", "/v1/withdrawals/", "/v1//x"} {
 		if err := checkPath(path); err == nil {
@@ -393,5 +263,77 @@ func TestOperationIdsMatchTheirResponseTypes(t *testing.T) {
 		if !regexp.MustCompile(`(?m)^\s{8}` + match[1] + `Res:\s*$`).MatchString(string(spec)) {
 			t.Errorf("operationId %s has no %sRes schema to return", match[1], match[1])
 		}
+	}
+}
+
+// Every /v1 route needs the credential. Sending it is one option rather than a
+// parameter on each call, so forgetting it fails at construction time for the
+// whole client instead of once per endpoint.
+func TestAPIKeyTravelsAsABearerHeader(t *testing.T) {
+	var header string
+	server := stub(t, func(w http.ResponseWriter, r *http.Request) {
+		header = r.Header.Get("Authorization")
+		writeEnvelope(w, 0, "", GetWalletRes{Seed: 1})
+	})
+	client := dial(t, server.URL, WithAPIKey("ew_secret"))
+
+	if _, err := client.GetWallet(context.Background(), GetWalletReq{Chain: "bsc"}); err != nil {
+		t.Fatal(err)
+	}
+	if header != "Bearer ew_secret" {
+		t.Errorf("Authorization = %q", header)
+	}
+}
+
+// An empty key is a configuration mistake, not a request without credentials.
+// Sending it anyway would come back as 401 and read as a wrong key.
+func TestAnEmptyAPIKeyIsRefusedBeforeSending(t *testing.T) {
+	sent := false
+	server := stub(t, func(w http.ResponseWriter, r *http.Request) {
+		sent = true
+		writeEnvelope(w, 0, "", GetWalletRes{})
+	})
+	client := dial(t, server.URL, WithAPIKey("   "))
+
+	if _, err := client.GetWallet(context.Background(), GetWalletReq{Chain: "bsc"}); err == nil {
+		t.Fatal("a request went out with an empty credential")
+	}
+	if sent {
+		t.Error("the server was reached")
+	}
+}
+
+// One call covers all three questions, and asking for a wallet without naming
+// one is the only case that takes a seed.
+func TestGetWalletCarriesTheLookupItWasGiven(t *testing.T) {
+	seed := int64(1001)
+	address := "0xabc"
+	cases := map[string]GetWalletReq{
+		"by seed":    {Chain: "bsc", Seed: &seed},
+		"by address": {Chain: "bsc", Address: &address},
+		"a new one":  {Chain: "bsc"},
+	}
+	for name, req := range cases {
+		t.Run(name, func(t *testing.T) {
+			var got GetWalletReq
+			server := stub(t, func(w http.ResponseWriter, r *http.Request) {
+				_ = json.NewDecoder(r.Body).Decode(&got)
+				writeEnvelope(w, 0, "", GetWalletRes{Seed: 1001, Chain: "bsc", Address: "0xabc"})
+			})
+			client := dial(t, server.URL)
+
+			if _, err := client.GetWallet(context.Background(), req); err != nil {
+				t.Fatal(err)
+			}
+			if got.Chain != req.Chain {
+				t.Errorf("chain = %q, want %q", got.Chain, req.Chain)
+			}
+			if (got.Seed == nil) != (req.Seed == nil) || (got.Seed != nil && *got.Seed != *req.Seed) {
+				t.Errorf("seed = %v, want %v", got.Seed, req.Seed)
+			}
+			if (got.Address == nil) != (req.Address == nil) || (got.Address != nil && *got.Address != *req.Address) {
+				t.Errorf("address = %v, want %v", got.Address, req.Address)
+			}
+		})
 	}
 }

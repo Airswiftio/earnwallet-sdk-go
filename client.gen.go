@@ -5,24 +5,8 @@ package earnwallet
 
 import (
 	"context"
-	"net/url"
 	"time"
 )
-
-// AllocateSeedReq defines model for AllocateSeedReq.
-type AllocateSeedReq struct {
-	// ExternalRef Opaque idempotency key defined by the caller; infra does not interpret it
-	ExternalRef string `json:"external_ref"`
-}
-
-// AllocateSeedRes defines model for AllocateSeedRes.
-type AllocateSeedRes struct {
-	// ExternalRef Echoed back so a retried request can be matched to its response
-	ExternalRef string `json:"external_ref"`
-
-	// Seed Global seed in [1, 2^32-1], shared across chains
-	Seed int64 `json:"seed"`
-}
 
 // Chain defines model for Chain.
 type Chain struct {
@@ -87,21 +71,28 @@ type Error struct {
 	Message string `json:"message"`
 }
 
-// GetAddressReq defines model for GetAddressReq.
-type GetAddressReq struct {
+// GetWalletReq defines model for GetWalletReq.
+type GetWalletReq struct {
+	// Address Look up the seed that owns this address
+	Address *string `json:"address,omitempty"`
+
 	// Chain Chain name as configured, lower case, e.g. bsc
 	Chain string `json:"chain"`
 
-	// Seed Global seed in [1, 2^32-1]
-	Seed int64 `json:"seed"`
+	// Seed Look up this seed; omit both seed and address to take a new one
+	Seed *int64 `json:"seed,omitempty"`
 }
 
-// GetAddressRes defines model for GetAddressRes.
-type GetAddressRes struct {
+// GetWalletRes defines model for GetWalletRes.
+type GetWalletRes struct {
 	Address string `json:"address"`
 	Chain   string `json:"chain"`
+
+	// Factory The factory this address was derived under
 	Factory string `json:"factory"`
-	Seed    int64  `json:"seed"`
+
+	// Seed Identifies this wallet on every chain, not just this one
+	Seed int64 `json:"seed"`
 }
 
 // GetWithdrawalReq defines model for GetWithdrawalReq.
@@ -175,20 +166,6 @@ type ListWithdrawalsRes struct {
 	Total int64        `json:"total"`
 }
 
-// ResolveAddressReq defines model for ResolveAddressReq.
-type ResolveAddressReq struct {
-	Address string `json:"address"`
-	Chain   string `json:"chain"`
-}
-
-// ResolveAddressRes defines model for ResolveAddressRes.
-type ResolveAddressRes struct {
-	Address string `json:"address"`
-	Chain   string `json:"chain"`
-	Factory string `json:"factory"`
-	Seed    int64  `json:"seed"`
-}
-
 // Token defines model for Token.
 type Token struct {
 	// Decimals amount == raw_amount / 10^decimals
@@ -221,131 +198,72 @@ type Withdrawal struct {
 	TxHash       *string    `json:"tx_hash,omitempty"`
 }
 
-// GetAddressParams defines parameters for GetAddress.
-type GetAddressParams struct {
-	// Chain Chain name as configured, lower case, e.g. bsc
-	Chain string `form:"chain" json:"chain"`
+// ListChainsJSONRequestBody defines body for ListChains for application/json ContentType.
+type ListChainsJSONRequestBody = ListChainsReq
 
-	// Seed Global seed in [1, 2^32-1]
-	Seed int64 `form:"seed" json:"seed"`
-}
+// ListDepositsJSONRequestBody defines body for ListDeposits for application/json ContentType.
+type ListDepositsJSONRequestBody = ListDepositsReq
 
-// ResolveAddressParams defines parameters for ResolveAddress.
-type ResolveAddressParams struct {
-	Chain   string `form:"chain" json:"chain"`
-	Address string `form:"address" json:"address"`
-}
+// GetWalletJSONRequestBody defines body for GetWallet for application/json ContentType.
+type GetWalletJSONRequestBody = GetWalletReq
 
-// ListDepositsParams defines parameters for ListDeposits.
-type ListDepositsParams struct {
-	// Chain Limit to one chain
-	Chain *string `form:"chain,omitempty" json:"chain,omitempty"`
+// GetWithdrawalJSONRequestBody defines body for GetWithdrawal for application/json ContentType.
+type GetWithdrawalJSONRequestBody = GetWithdrawalReq
 
-	// Since Credited at or after this instant, RFC3339
-	Since *time.Time `form:"since,omitempty" json:"since,omitempty"`
-
-	// Until Credited strictly before this instant, RFC3339
-	Until *time.Time `form:"until,omitempty" json:"until,omitempty"`
-	Page  *int64     `form:"page,omitempty" json:"page,omitempty"`
-	Size  *int64     `form:"size,omitempty" json:"size,omitempty"`
-}
-
-// ListWithdrawalsParams defines parameters for ListWithdrawals.
-type ListWithdrawalsParams struct {
-	// Chain Limit to one chain
-	Chain *string `form:"chain,omitempty" json:"chain,omitempty"`
-
-	// Status accepted, held, planned, confirmed or failed
-	Status *string `form:"status,omitempty" json:"status,omitempty"`
-
-	// Since Created at or after this instant, RFC3339
-	Since *time.Time `form:"since,omitempty" json:"since,omitempty"`
-
-	// Until Created strictly before this instant, RFC3339
-	Until *time.Time `form:"until,omitempty" json:"until,omitempty"`
-	Page  *int64     `form:"page,omitempty" json:"page,omitempty"`
-	Size  *int64     `form:"size,omitempty" json:"size,omitempty"`
-}
-
-// AllocateSeedJSONRequestBody defines body for AllocateSeed for application/json ContentType.
-type AllocateSeedJSONRequestBody = AllocateSeedReq
+// ListWithdrawalsJSONRequestBody defines body for ListWithdrawals for application/json ContentType.
+type ListWithdrawalsJSONRequestBody = ListWithdrawalsReq
 
 // CreateWithdrawalJSONRequestBody defines body for CreateWithdrawal for application/json ContentType.
 type CreateWithdrawalJSONRequestBody = CreateWithdrawalReq
-
-// GetAddress forward lookup: chain plus seed to address.
-//
-// A non-zero code in the reply comes back as *APIError. Any other error is a
-// transport failure, and the request may still have been served.
-func (c *Client) GetAddress(ctx context.Context, params GetAddressParams) (*GetAddressRes, error) {
-	path := "/v1/addresses"
-
-	query := url.Values{}
-	query.Set("chain", formatParam(params.Chain))
-	query.Set("seed", formatParam(params.Seed))
-
-	return send[GetAddressRes](ctx, c, "GET", path, query, nil)
-}
-
-// ResolveAddress reverse lookup: chain plus address to seed.
-//
-// A non-zero code in the reply comes back as *APIError. Any other error is a
-// transport failure, and the request may still have been served.
-func (c *Client) ResolveAddress(ctx context.Context, params ResolveAddressParams) (*ResolveAddressRes, error) {
-	path := "/v1/addresses/resolve"
-
-	query := url.Values{}
-	query.Set("chain", formatParam(params.Chain))
-	query.Set("address", formatParam(params.Address))
-
-	return send[ResolveAddressRes](ctx, c, "GET", path, query, nil)
-}
 
 // ListChains list the chains and tokens this deployment supports.
 //
 // A non-zero code in the reply comes back as *APIError. Any other error is a
 // transport failure, and the request may still have been served.
-func (c *Client) ListChains(ctx context.Context) (*ListChainsRes, error) {
-	path := "/v1/chains"
+func (c *Client) ListChains(ctx context.Context, body ListChainsJSONRequestBody) (*ListChainsRes, error) {
+	path := "/v1/chain/list"
 
-	return send[ListChainsRes](ctx, c, "GET", path, nil, nil)
+	return send[ListChainsRes](ctx, c, "POST", path, nil, body)
 }
 
 // ListDeposits list credited deposits for reconciliation.
 //
 // A non-zero code in the reply comes back as *APIError. Any other error is a
 // transport failure, and the request may still have been served.
-func (c *Client) ListDeposits(ctx context.Context, params ListDepositsParams) (*ListDepositsRes, error) {
-	path := "/v1/deposits"
+func (c *Client) ListDeposits(ctx context.Context, body ListDepositsJSONRequestBody) (*ListDepositsRes, error) {
+	path := "/v1/deposit/list"
 
-	query := url.Values{}
-	if params.Chain != nil {
-		query.Set("chain", formatParam(*params.Chain))
-	}
-	if params.Since != nil {
-		query.Set("since", formatParam(*params.Since))
-	}
-	if params.Until != nil {
-		query.Set("until", formatParam(*params.Until))
-	}
-	if params.Page != nil {
-		query.Set("page", formatParam(*params.Page))
-	}
-	if params.Size != nil {
-		query.Set("size", formatParam(*params.Size))
-	}
-
-	return send[ListDepositsRes](ctx, c, "GET", path, query, nil)
+	return send[ListDepositsRes](ctx, c, "POST", path, nil, body)
 }
 
-// AllocateSeed allocate the seed bound to an external reference.
+// GetWallet get a deposit wallet by seed or address, or take a new one.
 //
 // A non-zero code in the reply comes back as *APIError. Any other error is a
 // transport failure, and the request may still have been served.
-func (c *Client) AllocateSeed(ctx context.Context, body AllocateSeedJSONRequestBody) (*AllocateSeedRes, error) {
-	path := "/v1/seeds"
+func (c *Client) GetWallet(ctx context.Context, body GetWalletJSONRequestBody) (*GetWalletRes, error) {
+	path := "/v1/wallet/get"
 
-	return send[AllocateSeedRes](ctx, c, "POST", path, nil, body)
+	return send[GetWalletRes](ctx, c, "POST", path, nil, body)
+}
+
+// GetWithdrawal read one payout order.
+//
+// A non-zero code in the reply comes back as *APIError. Any other error is a
+// transport failure, and the request may still have been served.
+func (c *Client) GetWithdrawal(ctx context.Context, body GetWithdrawalJSONRequestBody) (*GetWithdrawalRes, error) {
+	path := "/v1/withdrawal/get"
+
+	return send[GetWithdrawalRes](ctx, c, "POST", path, nil, body)
+}
+
+// ListWithdrawals list payout orders for reconciliation.
+//
+// A non-zero code in the reply comes back as *APIError. Any other error is a
+// transport failure, and the request may still have been served.
+func (c *Client) ListWithdrawals(ctx context.Context, body ListWithdrawalsJSONRequestBody) (*ListWithdrawalsRes, error) {
+	path := "/v1/withdrawal/list"
+
+	return send[ListWithdrawalsRes](ctx, c, "POST", path, nil, body)
 }
 
 // CreateWithdrawal submit a payout order.
@@ -353,50 +271,9 @@ func (c *Client) AllocateSeed(ctx context.Context, body AllocateSeedJSONRequestB
 // A non-zero code in the reply comes back as *APIError. Any other error is a
 // transport failure, and the request may still have been served.
 func (c *Client) CreateWithdrawal(ctx context.Context, body CreateWithdrawalJSONRequestBody) (*CreateWithdrawalRes, error) {
-	path := "/v1/withdrawals"
+	path := "/v1/withdrawal/submit"
 
 	return send[CreateWithdrawalRes](ctx, c, "POST", path, nil, body)
-}
-
-// ListWithdrawals list payout orders for reconciliation.
-//
-// A non-zero code in the reply comes back as *APIError. Any other error is a
-// transport failure, and the request may still have been served.
-func (c *Client) ListWithdrawals(ctx context.Context, params ListWithdrawalsParams) (*ListWithdrawalsRes, error) {
-	path := "/v1/withdrawals/list"
-
-	query := url.Values{}
-	if params.Chain != nil {
-		query.Set("chain", formatParam(*params.Chain))
-	}
-	if params.Status != nil {
-		query.Set("status", formatParam(*params.Status))
-	}
-	if params.Since != nil {
-		query.Set("since", formatParam(*params.Since))
-	}
-	if params.Until != nil {
-		query.Set("until", formatParam(*params.Until))
-	}
-	if params.Page != nil {
-		query.Set("page", formatParam(*params.Page))
-	}
-	if params.Size != nil {
-		query.Set("size", formatParam(*params.Size))
-	}
-
-	return send[ListWithdrawalsRes](ctx, c, "GET", path, query, nil)
-}
-
-// GetWithdrawal read one payout order.
-//
-// A non-zero code in the reply comes back as *APIError. Any other error is a
-// transport failure, and the request may still have been served.
-func (c *Client) GetWithdrawal(ctx context.Context, externalId string) (*GetWithdrawalRes, error) {
-	path := "/v1/withdrawals/{external_id}"
-	path = replacePathParam(path, "external_id", externalId)
-
-	return send[GetWithdrawalRes](ctx, c, "GET", path, nil, nil)
 }
 
 // The with-responses layer is intentionally not generated. It hands the

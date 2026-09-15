@@ -82,11 +82,19 @@ an endpoint that credits whoever can reach it is worse than one that is down.
 
 ## Calling the API
 
+Every route is `POST /v1/<resource>/<action>` with a JSON body, and every one
+of them needs the tenant key.
+
 ```go
-client, err := earnwallet.NewClient("https://earnwallet.internal")
+client, err := earnwallet.NewClient("https://earnwallet.internal",
+    earnwallet.WithAPIKey(os.Getenv("EARNWALLET_API_KEY")))
 if err != nil {
     return err
 }
+
+// A wallet to receive deposits. Omit seed and address to take a new one;
+// give a seed to look one up, or an address to find out whose it is.
+wallet, err := client.GetWallet(ctx, earnwallet.GetWalletReq{Chain: "bsc"})
 
 order, err := client.CreateWithdrawal(ctx, earnwallet.CreateWithdrawalReq{
     ExternalId: "wd-0001",
@@ -97,26 +105,23 @@ order, err := client.CreateWithdrawal(ctx, earnwallet.CreateWithdrawalReq{
 })
 ```
 
-Ask `ListChains` what this deployment supports rather than hardcoding chain
-names, token addresses or limits — they are configuration and differ between
-environments. A token reported with `withdrawable: false` has no configured
-ceiling, and on an outbound path that means not allowed, never unbounded.
+Nothing is created on chain by `GetWallet`. The address is computed from the
+factory and the seed, and the wallet contract is not deployed until the first
+collection sweeps it — funds arrive either way. Do not wait for a confirmation;
+there is no transaction.
 
-`ListDeposits` and `ListWithdrawals` exist for recovery, not as a second
-delivery path: a receiver that was down long enough for its events to
-dead-letter can catch up by itself instead of asking the custodian's operator
-to replay them.
-
+The seed identifies that wallet on **every** chain, so one seed plus a chain
+name is all that is ever needed to get an address back.
 
 Every response travels in a `{code, message, data}` envelope, and a business
 failure arrives as **HTTP 200 with a non-zero code** rather than as an error
-status. The client unwraps that for you: `data` is returned, and a non-zero
-code comes back as `*APIError`.
+status. The client unwraps that: `data` is returned, and a non-zero code comes
+back as `*APIError`.
 
 ```go
 var apiErr *earnwallet.APIError
 if errors.As(err, &apiErr) {
-    // The service rejected the order. Do not retry as-is.
+    // The service rejected it. Do not retry as-is.
 }
 ```
 
@@ -124,16 +129,19 @@ Anything else is a transport failure, and it is not a rejection: a timed-out
 submission may still have created the order. Retry with the same `ExternalId` —
 that is what makes the retry safe — rather than opening a second one.
 
-`WithRequestEditor` runs on every outgoing request, which is where a credential
-or a trace header goes:
+`GetWallet` has no such key. A timed-out call retried without a seed takes a
+second seed and abandons the first, which costs nothing because nobody was ever
+told about it — but do not store both.
 
-```go
-client, err := earnwallet.NewClient(base, earnwallet.WithRequestEditor(
-    func(r *http.Request) error {
-        r.Header.Set("Authorization", "Bearer "+token)
-        return nil
-    }))
-```
+Ask `ListChains` what this deployment supports rather than hardcoding chain
+names, token addresses or limits: they are configuration and differ between
+environments. A token reported with `withdrawable: false` has no configured
+ceiling, and on an outbound path that means not allowed, never unbounded.
+
+`ListDeposits` and `ListWithdrawals` exist for recovery, not as a second
+delivery path: a receiver that was down long enough for its events to
+dead-letter can catch up by itself instead of asking the custodian's operator
+to replay them.
 
 ## How this is built
 
