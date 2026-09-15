@@ -12,16 +12,16 @@ import (
 	"strings"
 )
 
+// This file is the half of the client that does not grow with the API: the
+// transport, the envelope, and what counts as a failure. One method per
+// operation is generated onto Client from templates/client.tmpl, so adding a
+// route to the service adds a method here without anyone writing one.
+//
+// The split is deliberate. Generated code scales; reviewed code is where
+// judgement belongs. Putting the envelope rules in a template would hide the
+// only part worth reading.
+
 // Client calls the EarnWallet API.
-//
-// It is written rather than generated so the SDK carries no third-party
-// dependencies: generating it pulls in a runtime package for query-string
-// encoding, and with it two libraries this API has no use for. The request and
-// response types in models.gen.go are still generated from the service's own
-// specification, which is where the churn actually is - a field changes far
-// more often than a route appears.
-//
-// TestEveryPublishedOperationHasAMethod keeps the two in step.
 type Client struct {
 	baseURL string
 	http    *http.Client
@@ -30,14 +30,14 @@ type Client struct {
 
 // RequestEditor runs on every outgoing request before it is sent. It is the
 // seam for whatever the deployment needs on the wire - a credential, a trace
-// header, a tenant marker - so adding one later is not a breaking change here.
+// header, a tenant marker - so adding one later is not a breaking change to
+// anything published here.
 type RequestEditor func(*http.Request) error
 
 type Option func(*Client)
 
-// WithHTTPClient replaces the transport. Use it to set timeouts, proxies or a
-// connection pool; the default client has no timeout, which is rarely what a
-// service wants.
+// WithHTTPClient replaces the transport. Use it to set a timeout: the default
+// client has none, which is rarely what a service wants.
 func WithHTTPClient(doer *http.Client) Option {
 	return func(c *Client) {
 		if doer != nil {
@@ -88,59 +88,47 @@ func (e *APIError) Error() string {
 	return "earnwallet: " + strconv.Itoa(e.Code) + " " + e.Message
 }
 
-// GetAddress derives the deposit address for a seed on a chain. Derivation is
-// arithmetic, so the address is returned whether or not anything has been sent
-// to it.
-func (c *Client) GetAddress(ctx context.Context, in GetAddressReq) (*GetAddressRes, error) {
-	query := url.Values{}
-	query.Set("chain", in.Chain)
-	query.Set("seed", strconv.FormatInt(in.Seed, 10))
-	if in.Factory != nil {
-		// Omitted rather than sent empty: the service reads an absent factory
-		// as "the chain's current one", and an empty string as a bad address.
-		query.Set("factory", *in.Factory)
+// formatParam renders a scalar for a query string. The generated methods call
+// it rather than carrying a type switch each, and the switch lives here so a
+// parameter type the API has never used cannot be silently stringified by a
+// template nobody reads.
+func formatParam(value any) string {
+	switch typed := value.(type) {
+	case string:
+		return typed
+	case bool:
+		return strconv.FormatBool(typed)
+	case int:
+		return strconv.Itoa(typed)
+	case int32:
+		return strconv.FormatInt(int64(typed), 10)
+	case int64:
+		return strconv.FormatInt(typed, 10)
+	case uint32:
+		return strconv.FormatUint(uint64(typed), 10)
+	case uint64:
+		return strconv.FormatUint(typed, 10)
+	default:
+		return fmt.Sprint(typed)
 	}
-	return send[GetAddressRes](ctx, c, http.MethodGet, "/v1/addresses", query, nil)
 }
 
-// ResolveAddress is the reverse lookup: which seed owns this address.
-func (c *Client) ResolveAddress(ctx context.Context, in ResolveAddressReq) (*ResolveAddressRes, error) {
-	query := url.Values{}
-	query.Set("chain", in.Chain)
-	query.Set("address", in.Address)
-	return send[ResolveAddressRes](ctx, c, http.MethodGet, "/v1/addresses/resolve", query, nil)
-}
-
-// AllocateSeed binds a seed to the caller's own reference. ExternalRef is the
-// idempotency key: allocating twice with the same one returns the same seed
-// rather than burning a second.
-func (c *Client) AllocateSeed(ctx context.Context, in AllocateSeedReq) (*AllocateSeedRes, error) {
-	return send[AllocateSeedRes](ctx, c, http.MethodPost, "/v1/seeds", nil, in)
-}
-
-// CreateWithdrawal submits a payout order.
+// replacePathParam substitutes one {name} placeholder, escaped so a value
+// containing a slash lands as one path segment instead of walking out of the
+// route it was meant to identify.
 //
-// ExternalId is the idempotency key and it matters more here than anywhere
-// else: a timed-out submission may already have created the order, and
-// resubmitting under a new id pays twice. Retry with the same one.
-func (c *Client) CreateWithdrawal(ctx context.Context, in CreateWithdrawalReq) (*CreateWithdrawalRes, error) {
-	return send[CreateWithdrawalRes](ctx, c, http.MethodPost, "/v1/withdrawals", nil, in)
-}
-
-// GetWithdrawal reads one order. It is for looking into a specific order, not
-// for reconciling: the terminal state arrives by callback, which has an outbox
-// behind it, and polling has nothing.
-func (c *Client) GetWithdrawal(ctx context.Context, externalID string) (*GetWithdrawalRes, error) {
-	if strings.TrimSpace(externalID) == "" {
-		return nil, fmt.Errorf("earnwallet: an external id is required")
+// A blank value is left unsubstituted on purpose, so checkPath reports which
+// parameter was missing. Escaping it instead would send "%20" as an id and get
+// back a not-found that says nothing about the real mistake.
+func replacePathParam(path, name, value string) string {
+	if strings.TrimSpace(value) == "" {
+		return path
 	}
-	return send[GetWithdrawalRes](ctx, c, http.MethodGet,
-		"/v1/withdrawals/"+url.PathEscape(externalID), nil, nil)
+	return strings.ReplaceAll(path, "{"+name+"}", url.PathEscape(value))
 }
 
-// envelope is what every endpoint answers with. Decoding it in one place is
-// half the reason this file is written by hand: a generated client hands the
-// envelope back and every call site has to unwrap it the same way.
+// envelope is what every endpoint answers with. Decoding it once here is why
+// the generated methods can return the payload directly.
 type envelope[T any] struct {
 	Code    int    `json:"code"`
 	Message string `json:"message"`
@@ -148,6 +136,10 @@ type envelope[T any] struct {
 }
 
 func send[T any](ctx context.Context, c *Client, method, path string, query url.Values, body any) (*T, error) {
+	if err := checkPath(path); err != nil {
+		return nil, err
+	}
+
 	var reader io.Reader
 	if body != nil {
 		raw, err := json.Marshal(body)
@@ -201,11 +193,34 @@ func send[T any](ctx context.Context, c *Client, method, path string, query url.
 		return nil, &APIError{Code: decoded.Code, Message: decoded.Message, StatusCode: resp.StatusCode}
 	}
 	// A non-2xx that still decoded as a success envelope is a contradiction;
-	// treating it as success would credit an outcome the service did not report.
+	// treating it as success would report an outcome the service never gave.
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return nil, &APIError{Code: decoded.Code, Message: resp.Status, StatusCode: resp.StatusCode}
 	}
 	return &decoded.Data, nil
+}
+
+// checkPath refuses a route that did not come out whole.
+//
+// An empty path parameter leaves an empty segment, which addresses the
+// collection rather than the item - GET /v1/withdrawals/ is a different request
+// from GET /v1/withdrawals/{id}, not a failing one, so it has to be caught
+// before it is sent. A surviving brace means a placeholder was never
+// substituted at all.
+func checkPath(path string) error {
+	if open := strings.Index(path, "{"); open >= 0 {
+		name := path[open+1:]
+		if close := strings.Index(name, "}"); close >= 0 {
+			name = name[:close]
+		}
+		return fmt.Errorf("earnwallet: path parameter %q is empty or missing", name)
+	}
+	for _, segment := range strings.Split(strings.TrimPrefix(path, "/"), "/") {
+		if segment == "" {
+			return fmt.Errorf("earnwallet: a path parameter was empty, which would address %s", path)
+		}
+	}
+	return nil
 }
 
 func truncate(payload []byte) string {

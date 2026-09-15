@@ -59,7 +59,7 @@ func TestTrailingSlashDoesNotDoubleUp(t *testing.T) {
 	})
 	client := dial(t, server.URL+"/")
 
-	if _, err := client.GetAddress(context.Background(), GetAddressReq{Chain: "bsc", Seed: 1}); err != nil {
+	if _, err := client.GetAddress(context.Background(), GetAddressParams{Chain: "bsc", Seed: 1}); err != nil {
 		t.Fatal(err)
 	}
 	if path != "/v1/addresses" {
@@ -75,7 +75,7 @@ func TestGetAddressSendsItsParameters(t *testing.T) {
 	})
 	client := dial(t, server.URL)
 
-	res, err := client.GetAddress(context.Background(), GetAddressReq{Chain: "bsc", Seed: 1001})
+	res, err := client.GetAddress(context.Background(), GetAddressParams{Chain: "bsc", Seed: 1001})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -105,7 +105,7 @@ func TestGetAddressSendsFactoryWhenPinned(t *testing.T) {
 
 	factory := "0xd7073a2a1884b66852726fed2b9a8511095e3398"
 	if _, err := client.GetAddress(context.Background(),
-		GetAddressReq{Chain: "bsc", Seed: 1, Factory: &factory}); err != nil {
+		GetAddressParams{Chain: "bsc", Seed: 1, Factory: &factory}); err != nil {
 		t.Fatal(err)
 	}
 	if got := query.Get("factory"); got != factory {
@@ -220,10 +220,28 @@ func TestExternalIdIsEscapedIntoThePath(t *testing.T) {
 	}
 }
 
-func TestGetWithdrawalRequiresAnId(t *testing.T) {
-	client := dial(t, "http://127.0.0.1:1")
-	if _, err := client.GetWithdrawal(context.Background(), "  "); err == nil {
-		t.Error("an empty id would request the collection, not an order")
+// An empty id would address the collection rather than an order - a different
+// request, not a failing one - so it has to be refused before it is sent.
+func TestABlankPathParameterIsRefusedBeforeSending(t *testing.T) {
+	reached := false
+	server := stub(t, func(w http.ResponseWriter, r *http.Request) {
+		reached = true
+		writeEnvelope(w, 0, "", GetWithdrawalRes{})
+	})
+	client := dial(t, server.URL)
+
+	for _, id := range []string{"", "   ", "	"} {
+		_, err := client.GetWithdrawal(context.Background(), id)
+		if err == nil {
+			t.Errorf("GetWithdrawal(%q) was sent", id)
+			continue
+		}
+		if !strings.Contains(err.Error(), "external_id") {
+			t.Errorf("err = %v, want it to name the parameter", err)
+		}
+	}
+	if reached {
+		t.Error("a request with no id reached the server")
 	}
 }
 
@@ -304,4 +322,78 @@ func dial(t *testing.T, base string, opts ...Option) *Client {
 func writeEnvelope(w http.ResponseWriter, code int, message string, data any) {
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(map[string]any{"code": code, "message": message, "data": data})
+}
+
+// Templates call formatParam instead of carrying a type switch each. A wrong
+// rendering here is wrong on every generated method at once.
+func TestFormatParam(t *testing.T) {
+	cases := []struct {
+		value any
+		want  string
+	}{
+		{"bsc", "bsc"},
+		{"", ""},
+		{int64(1001), "1001"},
+		{int64(0), "0"},
+		{int64(-1), "-1"},
+		{int(7), "7"},
+		{uint32(4294967295), "4294967295"},
+		{true, "true"},
+	}
+	for _, tc := range cases {
+		if got := formatParam(tc.value); got != tc.want {
+			t.Errorf("formatParam(%#v) = %q, want %q", tc.value, got, tc.want)
+		}
+	}
+}
+
+// A seed is documented as fitting in 2^32-1. Rendering it through a float would
+// round the high end, so it must go out exactly.
+func TestLargeSeedSurvivesTheQueryString(t *testing.T) {
+	var query url.Values
+	server := stub(t, func(w http.ResponseWriter, r *http.Request) {
+		query = r.URL.Query()
+		writeEnvelope(w, 0, "", GetAddressRes{})
+	})
+	client := dial(t, server.URL)
+
+	if _, err := client.GetAddress(context.Background(),
+		GetAddressParams{Chain: "bsc", Seed: 4294967295}); err != nil {
+		t.Fatal(err)
+	}
+	if got := query.Get("seed"); got != "4294967295" {
+		t.Errorf("seed = %q, want it exact", got)
+	}
+}
+
+func TestCheckPathRejectsIncompleteRoutes(t *testing.T) {
+	for _, path := range []string{"/v1/withdrawals/{external_id}", "/v1/withdrawals/", "/v1//x"} {
+		if err := checkPath(path); err == nil {
+			t.Errorf("checkPath(%q) was accepted", path)
+		}
+	}
+	for _, path := range []string{"/v1/addresses", "/v1/withdrawals/wd-1"} {
+		if err := checkPath(path); err != nil {
+			t.Errorf("checkPath(%q) = %v", path, err)
+		}
+	}
+}
+
+// The template writes {{.OperationId}}Res as every return type, which holds
+// only because the exporter derives operationId from that type. If the two ever
+// disagree the generated file stops compiling, so this records why.
+func TestOperationIdsMatchTheirResponseTypes(t *testing.T) {
+	spec, err := os.ReadFile("openapi.yaml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	ids := regexp.MustCompile(`(?m)^\s*operationId:\s*(\w+)\s*$`).FindAllStringSubmatch(string(spec), -1)
+	if len(ids) == 0 {
+		t.Fatal("no operationId found; this test is no longer checking anything")
+	}
+	for _, match := range ids {
+		if !regexp.MustCompile(`(?m)^\s{8}` + match[1] + `Res:\s*$`).MatchString(string(spec)) {
+			t.Errorf("operationId %s has no %sRes schema to return", match[1], match[1])
+		}
+	}
 }

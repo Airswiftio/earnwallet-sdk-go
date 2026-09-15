@@ -1,0 +1,8 @@
+// The with-responses layer is intentionally not generated. It hands the
+// {code,message,data} envelope back untouched, so every call site would unwrap
+// it the same way; the methods above return the unwrapped data and an
+// *APIError instead. See oapi-codegen.yaml.
+//
+// This file cannot be blank: text/template ignores a redefinition whose body is
+// only comments or whitespace, so an empty override silently leaves the stock
+// template in place.

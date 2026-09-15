@@ -1,0 +1,51 @@
+{{/*
+One method per published operation, emitted straight onto the hand-written
+Client in client.go.
+
+This template replaces oapi-codegen's stock client, which imports
+oapi-codegen/runtime to encode query strings and drags two more modules in
+behind it. A published SDK should not widen anyone's dependency graph for
+four scalar parameters.
+
+It is deliberately dumb. Everything that needs judgement - building the URL,
+formatting a parameter, unwrapping the {code,message,data} envelope, deciding
+what counts as a failure - lives in client.go, where it is reviewed once and
+covered by tests, rather than in template syntax that nobody reads.
+
+Two facts from the exported specification hold it up, and both are asserted in
+the exporter's own tests rather than assumed here:
+
+  - every operation has an operationId
+  - operationId is the response type minus its Res suffix, so {{"{{"}}.OperationId{{"}}"}}Res
+    always names a real generated type
+*/}}
+{{range .}}
+{{$op := .}}
+{{$hasBody := gt (len .Bodies) 0}}
+{{$hasQuery := gt (len .QueryParams) 0}}
+{{if .Summary}}// {{.OperationId}} {{.Summary | lcFirst}}.
+{{else}}// {{.OperationId}} calls {{.Method}} {{.Path}}.
+{{end -}}
+//
+// A non-zero code in the reply comes back as *APIError. Any other error is a
+// transport failure, and the request may still have been served.
+func (c *Client) {{.OperationId}}(ctx context.Context{{range .PathParams}}, {{.GoVariableName}} string{{end}}{{if $hasQuery}}, params {{.OperationId}}Params{{end}}{{if $hasBody}}, body {{.OperationId}}{{(index .Bodies 0).NameTag}}RequestBody{{end}}) (*{{.OperationId}}Res, error) {
+	path := {{.Path | printf "%q"}}
+	{{range .PathParams -}}
+	path = replacePathParam(path, {{.ParamName | printf "%q"}}, {{.GoVariableName}})
+	{{end -}}
+	{{if $hasQuery}}
+	query := url.Values{}
+	{{range .QueryParams -}}
+	{{if .Required -}}
+	query.Set({{.ParamName | printf "%q"}}, formatParam(params.{{.GoName}}))
+	{{else -}}
+	if params.{{.GoName}} != nil {
+		query.Set({{.ParamName | printf "%q"}}, formatParam(*params.{{.GoName}}))
+	}
+	{{end -}}
+	{{end -}}
+	{{end}}
+	return send[{{.OperationId}}Res](ctx, c, {{.Method | printf "%q"}}, path, {{if $hasQuery}}query{{else}}nil{{end}}, {{if $hasBody}}body{{else}}nil{{end}})
+}
+{{end}}

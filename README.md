@@ -118,27 +118,39 @@ client, err := earnwallet.NewClient(base, earnwallet.WithRequestEditor(
     }))
 ```
 
-## Regenerating
+## How this is built
 
-`openapi.yaml` is produced by the service, not edited here:
+`openapi.yaml` is exported by the service; nothing in it is edited here.
 
 ```
 chainwallet openapi --out openapi.yaml   # in the service repository
 go generate ./...
 ```
 
-The generator version is pinned in `generate.go`, so a local regeneration and
-the one CI checks produce the same file.
+Generation covers the types **and one method per operation**, so adding a route
+to the service adds a method here without anyone writing one. What is not
+generated is the part that does not grow with the API: the transport, the
+envelope, and what counts as a failure, all in `client.go`.
 
-`models.gen.go` is checked in, as is usual for Go: consumers must not need a
-code generator to build.
+The client is emitted from `templates/client.tmpl` rather than oapi-codegen's
+stock template, which imports `oapi-codegen/runtime` to encode query strings and
+pulls two more modules in behind it. Four scalar parameters are not worth a
+dependency in a package other teams import.
 
-Only the types are generated. `client.go` is written by hand, because
-generating the client pulls in a runtime package for query-string encoding and
-two libraries below it that this API has no use for. The generated half is
-where the churn is — a field changes far more often than a route appears — and
+The template is deliberately dumb — it calls `formatParam`, `replacePathParam`
+and `send`, all hand-written and tested. Judgement lives in reviewed code;
+templates only repeat it per route.
+
+Two invariants from the exported specification hold it up, and both are
+asserted in the service's own tests rather than assumed:
+
+- every operation has an `operationId`
+- `operationId` is the response type minus its `Res` suffix, so
+  `{{.OperationId}}Res` always names a real generated type
+
 `TestEveryPublishedOperationHasAMethod` fails if an exported operation has no
-method.
+method, and `client.gen.go` is checked in, as is usual for Go: consumers must
+not need a code generator to build.
 
 ## Conformance vectors
 

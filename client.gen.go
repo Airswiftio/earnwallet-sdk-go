@@ -4,6 +4,8 @@
 package earnwallet
 
 import (
+	"context"
+	"net/url"
 	"time"
 )
 
@@ -130,3 +132,74 @@ type AllocateSeedJSONRequestBody = AllocateSeedReq
 
 // CreateWithdrawalJSONRequestBody defines body for CreateWithdrawal for application/json ContentType.
 type CreateWithdrawalJSONRequestBody = CreateWithdrawalReq
+
+// GetAddress forward lookup: chain plus factory plus seed to address.
+//
+// A non-zero code in the reply comes back as *APIError. Any other error is a
+// transport failure, and the request may still have been served.
+func (c *Client) GetAddress(ctx context.Context, params GetAddressParams) (*GetAddressRes, error) {
+	path := "/v1/addresses"
+
+	query := url.Values{}
+	query.Set("chain", formatParam(params.Chain))
+	if params.Factory != nil {
+		query.Set("factory", formatParam(*params.Factory))
+	}
+	query.Set("seed", formatParam(params.Seed))
+
+	return send[GetAddressRes](ctx, c, "GET", path, query, nil)
+}
+
+// ResolveAddress reverse lookup: chain plus address to seed.
+//
+// A non-zero code in the reply comes back as *APIError. Any other error is a
+// transport failure, and the request may still have been served.
+func (c *Client) ResolveAddress(ctx context.Context, params ResolveAddressParams) (*ResolveAddressRes, error) {
+	path := "/v1/addresses/resolve"
+
+	query := url.Values{}
+	query.Set("chain", formatParam(params.Chain))
+	query.Set("address", formatParam(params.Address))
+
+	return send[ResolveAddressRes](ctx, c, "GET", path, query, nil)
+}
+
+// AllocateSeed allocate the seed bound to an external reference.
+//
+// A non-zero code in the reply comes back as *APIError. Any other error is a
+// transport failure, and the request may still have been served.
+func (c *Client) AllocateSeed(ctx context.Context, body AllocateSeedJSONRequestBody) (*AllocateSeedRes, error) {
+	path := "/v1/seeds"
+
+	return send[AllocateSeedRes](ctx, c, "POST", path, nil, body)
+}
+
+// CreateWithdrawal submit a payout order.
+//
+// A non-zero code in the reply comes back as *APIError. Any other error is a
+// transport failure, and the request may still have been served.
+func (c *Client) CreateWithdrawal(ctx context.Context, body CreateWithdrawalJSONRequestBody) (*CreateWithdrawalRes, error) {
+	path := "/v1/withdrawals"
+
+	return send[CreateWithdrawalRes](ctx, c, "POST", path, nil, body)
+}
+
+// GetWithdrawal read one payout order.
+//
+// A non-zero code in the reply comes back as *APIError. Any other error is a
+// transport failure, and the request may still have been served.
+func (c *Client) GetWithdrawal(ctx context.Context, externalId string) (*GetWithdrawalRes, error) {
+	path := "/v1/withdrawals/{external_id}"
+	path = replacePathParam(path, "external_id", externalId)
+
+	return send[GetWithdrawalRes](ctx, c, "GET", path, nil, nil)
+}
+
+// The with-responses layer is intentionally not generated. It hands the
+// {code,message,data} envelope back untouched, so every call site would unwrap
+// it the same way; the methods above return the unwrapped data and an
+// *APIError instead. See oapi-codegen.yaml.
+//
+// This file cannot be blank: text/template ignores a redefinition whose body is
+// only comments or whitespace, so an empty override silently leaves the stock
+// template in place.

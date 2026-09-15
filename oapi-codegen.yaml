@@ -1,12 +1,19 @@
-# Only the types are generated. The client is hand-written in client.go so the
-# SDK carries no third-party dependencies: generating it pulls in
-# oapi-codegen/runtime for query-string encoding, and with it go-jsonmerge and
-# uuid, none of which this API needs.
+# The types and one method per operation are generated; everything that needs
+# judgement is hand-written in client.go.
 #
-# Regenerate with `go generate ./...`; the spec comes from the service.
+# client.tmpl replaces oapi-codegen's stock client, which imports
+# oapi-codegen/runtime to encode query strings and pulls two more modules in
+# behind it. Generating the methods keeps the client in step with the API as
+# routes are added; the template keeps that from costing a dependency.
+#
+# Regenerate with `go generate ./...`; openapi.yaml comes from the service.
 package: earnwallet
-output: models.gen.go
+output: client.gen.go
 generate:
   models: true
+  client: true
 output-options:
   skip-prune: true
+  user-templates:
+    client.tmpl: templates/client.tmpl
+    client-with-responses.tmpl: templates/client-with-responses.tmpl

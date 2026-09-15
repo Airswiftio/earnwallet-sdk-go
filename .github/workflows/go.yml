@@ -30,10 +30,10 @@ jobs:
       # updated without regenerating would ship types that do not describe the
       # API they were exported from. The generator version is pinned in
       # generate.go, so this runs exactly what a developer runs.
-      - name: models.gen.go is up to date
+      - name: client.gen.go is up to date
         run: |
           go generate ./...
-          git diff --exit-code models.gen.go
+          git diff --exit-code client.gen.go
 
       # A published SDK must not widen anyone's dependency graph. Checked at
       # module level: the package list is full of stdlib-vendored paths that

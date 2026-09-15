@@ -41,7 +41,7 @@ func ExampleClient_CreateWithdrawal() {
 		panic(err)
 	}
 
-	order, err := client.CreateWithdrawal(context.Background(), earnwallet.CreateWithdrawalReq{
+	order, err := client.CreateWithdrawal(context.Background(), earnwallet.CreateWithdrawalJSONRequestBody{
 		ExternalId: "wd-0001",
 		Chain:      "bsc",
 		TokenId:    "0x55d398326f99059ff775485246999027b3197955",
