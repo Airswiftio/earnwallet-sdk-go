@@ -15,18 +15,32 @@ jobs:
           go-version-file: go.mod
           cache: true
 
-      - run: gofmt -l . | tee /dev/stderr | (! read)
-        name: gofmt
+      - name: gofmt
+        run: |
+          unformatted=$(gofmt -l .)
+          if [ -n "$unformatted" ]; then
+            echo "not gofmt'd:"; echo "$unformatted"; exit 1
+          fi
 
       - run: go vet ./...
 
       - run: go test -race ./...
 
-      # The checked-in client must match the checked-in specification. A spec
-      # updated without regenerating would ship a client that does not describe
-      # the API it was exported from.
-      - name: client.gen.go is up to date
+      # The checked-in types must match the checked-in specification. A spec
+      # updated without regenerating would ship types that do not describe the
+      # API they were exported from. The generator version is pinned in
+      # generate.go, so this runs exactly what a developer runs.
+      - name: models.gen.go is up to date
         run: |
-          go run github.com/oapi-codegen/oapi-codegen/v2/cmd/oapi-codegen@v2.4.1 \
-            --config oapi-codegen.yaml openapi.yaml
-          git diff --exit-code client.gen.go
+          go generate ./...
+          git diff --exit-code models.gen.go
+
+      # A published SDK must not widen anyone's dependency graph. Checked at
+      # module level: the package list is full of stdlib-vendored paths that
+      # are not dependencies at all.
+      - name: no third-party modules
+        run: |
+          modules=$(go list -m all | grep -v '^github.com/Airswiftio/earnwallet-sdk-go$' || true)
+          if [ -n "$modules" ]; then
+            echo "unexpected modules:"; echo "$modules"; exit 1
+          fi

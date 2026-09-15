@@ -2,6 +2,7 @@ package earnwallet_test
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"os"
@@ -34,32 +35,33 @@ func ExampleDepositHandler() {
 		}))
 }
 
-func ExampleClientWithResponses_CreateWithdrawalWithResponse() {
-	client, err := earnwallet.NewClientWithResponses("https://earnwallet.internal")
+func ExampleClient_CreateWithdrawal() {
+	client, err := earnwallet.NewClient("https://earnwallet.internal")
 	if err != nil {
 		panic(err)
 	}
 
-	res, err := client.CreateWithdrawalWithResponse(context.Background(), earnwallet.CreateWithdrawalReq{
+	order, err := client.CreateWithdrawal(context.Background(), earnwallet.CreateWithdrawalReq{
 		ExternalId: "wd-0001",
 		Chain:      "bsc",
 		TokenId:    "0x55d398326f99059ff775485246999027b3197955",
 		ToAddress:  "0x0000000000000000000000000000000000000001",
 		Amount:     "100",
 	})
-	// A transport error is not a rejection: the order may still exist. Retry
-	// with the same ExternalId rather than opening a second one.
+
+	// A business failure arrives as HTTP 200 with a non-zero code, and comes
+	// back as *APIError rather than as a status to inspect.
+	var apiErr *earnwallet.APIError
+	if errors.As(err, &apiErr) {
+		panic(fmt.Sprintf("rejected: %d %s", apiErr.Code, apiErr.Message))
+	}
+	// Anything else is a transport failure, and the order may still exist.
+	// Retry with the same ExternalId rather than opening a second one.
 	if err != nil {
 		panic(err)
 	}
-	if res.JSON200 == nil {
-		panic(fmt.Sprintf("unexpected reply: %s", res.Body))
-	}
-	// A business failure arrives as HTTP 200 with a non-zero code.
-	if res.JSON200.Code != 0 {
-		panic(fmt.Sprintf("%d %s", res.JSON200.Code, res.JSON200.Message))
-	}
-	fmt.Println(res.JSON200.Data.Status)
+
+	fmt.Println(order.Status)
 }
 
 func credit(context.Context, string, string, string) error { return nil }

@@ -77,40 +77,46 @@ an endpoint that credits whoever can reach it is worse than one that is down.
 ## Calling the API
 
 ```go
-client, err := earnwallet.NewClientWithResponses("https://earnwallet.internal")
+client, err := earnwallet.NewClient("https://earnwallet.internal")
 if err != nil {
     return err
 }
 
-res, err := client.CreateWithdrawalWithResponse(ctx, earnwallet.CreateWithdrawalReq{
+order, err := client.CreateWithdrawal(ctx, earnwallet.CreateWithdrawalReq{
     ExternalId: "wd-0001",
     Chain:      "bsc",
     TokenId:    "0x55d398326f99059ff775485246999027b3197955",
     ToAddress:  "0x...",
     Amount:     "100",
 })
-if err != nil {
-    return err              // transport failure; the order may or may not exist
-}
-if res.JSON200 == nil {
-    return fmt.Errorf("earnwallet: unexpected reply: %s", res.Body)
-}
-if res.JSON200.Code != 0 {
-    return fmt.Errorf("earnwallet: %d %s", res.JSON200.Code, res.JSON200.Message)
-}
-order := res.JSON200.Data     // nil only when code is non-zero
 ```
 
-Every response is `{code, message, data}`. `code` is `0` on success; any other
-value is a business failure and **arrives as HTTP 200**, so check `code` rather
-than the status.
+Every response travels in a `{code, message, data}` envelope, and a business
+failure arrives as **HTTP 200 with a non-zero code** rather than as an error
+status. The client unwraps that for you: `data` is returned, and a non-zero
+code comes back as `*APIError`.
 
-A transport error is not the same as a rejection: a timed-out submission may
-still have created the order. Retry it with the same `ExternalId` — that is what
-makes the retry safe — and read the result rather than opening a second order.
+```go
+var apiErr *earnwallet.APIError
+if errors.As(err, &apiErr) {
+    // The service rejected the order. Do not retry as-is.
+}
+```
 
-`ExternalId` is your idempotency key. Submitting the same one twice returns the
-existing order rather than paying twice.
+Anything else is a transport failure, and it is not a rejection: a timed-out
+submission may still have created the order. Retry with the same `ExternalId` —
+that is what makes the retry safe — rather than opening a second one.
+
+`WithRequestEditor` runs on every outgoing request, which is where a credential
+or a trace header goes:
+
+```go
+client, err := earnwallet.NewClient(base, earnwallet.WithRequestEditor(
+    func(r *http.Request) error {
+        r.Header.Set("Authorization", "Bearer "+token)
+        return nil
+    }))
+```
 
 ## Regenerating
 
@@ -124,8 +130,15 @@ go generate ./...
 The generator version is pinned in `generate.go`, so a local regeneration and
 the one CI checks produce the same file.
 
-`client.gen.go` is checked in, as is usual for Go: consumers must not need a
+`models.gen.go` is checked in, as is usual for Go: consumers must not need a
 code generator to build.
+
+Only the types are generated. `client.go` is written by hand, because
+generating the client pulls in a runtime package for query-string encoding and
+two libraries below it that this API has no use for. The generated half is
+where the churn is — a field changes far more often than a route appears — and
+`TestEveryPublishedOperationHasAMethod` fails if an exported operation has no
+method.
 
 ## Conformance vectors
 
@@ -141,5 +154,8 @@ can roll independently — unknown parameters are already ignored.
 
 ## Dependencies
 
-The callback half uses only the standard library. The generated client pulls in
-`github.com/oapi-codegen/runtime` for parameter binding.
+None. The whole package is standard library, so nothing here can widen your
+dependency graph or your audit surface.
+
+The code generator is a build-time tool pinned in `generate.go`; it is invoked
+with `go run <pkg>@<version>`, which never enters `go.mod`.

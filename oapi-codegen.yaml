@@ -1,12 +1,12 @@
-# Regenerate with:
-#   oapi-codegen --config oapi-codegen.yaml openapi.yaml
+# Only the types are generated. The client is hand-written in client.go so the
+# SDK carries no third-party dependencies: generating it pulls in
+# oapi-codegen/runtime for query-string encoding, and with it go-jsonmerge and
+# uuid, none of which this API needs.
 #
-# The spec itself is produced by the service, not edited here:
-#   chainwallet openapi --out openapi.yaml
+# Regenerate with `go generate ./...`; the spec comes from the service.
 package: earnwallet
-output: client.gen.go
+output: models.gen.go
 generate:
   models: true
-  client: true
 output-options:
   skip-prune: true
