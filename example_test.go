@@ -29,9 +29,9 @@ func ExampleDepositHandler() {
 	mux.Handle("/callbacks/earnwallet/withdraw", earnwallet.WithdrawalHandler(verifier,
 		func(r *http.Request, event earnwallet.WithdrawalEvent) error {
 			if !event.Succeeded() {
-				return settleFailure(r.Context(), event.ThirdPartyID, event.FailedReason)
+				return settleFailure(r.Context(), event.ExternalID, event.FailedReason)
 			}
-			return settleSuccess(r.Context(), event.ThirdPartyID, event.TxID)
+			return settleSuccess(r.Context(), event.ExternalID, event.TxID)
 		}))
 }
 

@@ -15,17 +15,17 @@
       "name": "withdrawal_success",
       "secret": "whsec_5f4dcc3b5aa765d61d8327deb882cf99",
       "timestamp": 1786440166,
-      "body": "{\"event\":\"withdrawal.succeeded\",\"event_id\":\"wd_wd-0001\",\"third_party_id\":\"wd-0001\",\"status\":0,\"amount\":\"100\",\"txid\":\"0xfeed\",\"chain\":\"bsc\",\"currency\":\"USDT\",\"token_id\":\"0x55d3\",\"block_height\":\"99\",\"timestamp\":\"1756684800000\"}",
-      "signature": "9cb1f87a7b208f7bf3b5549a74ccc52b487eed89544e198a667e6ff484e81d6d",
-      "header": "t=1786440166,v1=9cb1f87a7b208f7bf3b5549a74ccc52b487eed89544e198a667e6ff484e81d6d"
+      "body": "{\"event\":\"withdrawal.succeeded\",\"event_id\":\"wd_wd-0001\",\"external_id\":\"wd-0001\",\"status\":0,\"amount\":\"100\",\"txid\":\"0xfeed\",\"chain\":\"bsc\",\"currency\":\"USDT\",\"token_id\":\"0x55d3\",\"block_height\":\"99\",\"timestamp\":\"1756684800000\"}",
+      "signature": "ca7e7f5c6842720df9448e51e4c540543a809dec174770b6c91a77d771a7a398",
+      "header": "t=1786440166,v1=ca7e7f5c6842720df9448e51e4c540543a809dec174770b6c91a77d771a7a398"
     },
     {
       "name": "withdrawal_failed",
       "secret": "whsec_5f4dcc3b5aa765d61d8327deb882cf99",
       "timestamp": 1786440166,
-      "body": "{\"event\":\"withdrawal.failed\",\"event_id\":\"wd_wd-0002\",\"third_party_id\":\"wd-0002\",\"status\":2,\"amount\":\"100\",\"txid\":\"\",\"chain\":\"bsc\",\"currency\":\"USDT\",\"token_id\":\"0x55d3\",\"block_height\":\"0\",\"timestamp\":\"1756684800000\",\"failed_reason\":\"insufficient hot wallet balance\"}",
-      "signature": "6202ea2d410468a0bb904d3120df8320969130b8d2b68776eca5e9447d4d2fa4",
-      "header": "t=1786440166,v1=6202ea2d410468a0bb904d3120df8320969130b8d2b68776eca5e9447d4d2fa4"
+      "body": "{\"event\":\"withdrawal.failed\",\"event_id\":\"wd_wd-0002\",\"external_id\":\"wd-0002\",\"status\":2,\"amount\":\"100\",\"txid\":\"\",\"chain\":\"bsc\",\"currency\":\"USDT\",\"token_id\":\"0x55d3\",\"block_height\":\"0\",\"timestamp\":\"1756684800000\",\"failed_reason\":\"insufficient hot wallet balance\"}",
+      "signature": "d676463c8ad8a96a43775fb3538bc9540f0eb07753bd1375085590cfaf1d99fa",
+      "header": "t=1786440166,v1=d676463c8ad8a96a43775fb3538bc9540f0eb07753bd1375085590cfaf1d99fa"
     },
     {
       "name": "empty_body",

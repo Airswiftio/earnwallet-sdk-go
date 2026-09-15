@@ -82,7 +82,7 @@ func (e DepositEvent) IsNative() bool { return e.TransferIndex == NativeTransfer
 
 // WithdrawalEvent reports the terminal outcome of a payout.
 //
-// ThirdPartyID echoes back the external_id the order was submitted with,
+// ExternalID echoes back the external_id the order was submitted with,
 // unchanged, and is how the order is looked up.
 //
 // TxID is empty on failure: a payout that never broadcast has no hash.
@@ -93,7 +93,7 @@ type WithdrawalEvent struct {
 	Event   string `json:"event"`
 	EventID string `json:"event_id"`
 
-	ThirdPartyID string `json:"third_party_id"`
+	ExternalID   string `json:"external_id"`
 	Status       int64  `json:"status"`
 	Amount       string `json:"amount"`
 	TxID         string `json:"txid"`

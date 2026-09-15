@@ -48,7 +48,7 @@ verify before decoding; if you verify by hand, do the same.
 
 **Be idempotent.** Delivery is at-least-once. A callback that was processed will
 arrive again if the response was lost. Key deposits on `DepositEvent.TxID` and
-payouts on `WithdrawalEvent.ThirdPartyID`. `TxID` is `<tx hash>#<transfer index>`
+payouts on `WithdrawalEvent.ExternalID`. `TxID` is `<tx hash>#<transfer index>`
 rather than a bare hash, because one transaction can pay several deposit
 addresses and bare hashes would collide.
 

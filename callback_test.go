@@ -215,8 +215,8 @@ func TestWithdrawalHandlerReadsBothOutcomes(t *testing.T) {
 			if rec := post(handler, c.Header, c.Body); rec.Code != http.StatusOK {
 				t.Fatalf("status = %d, body %s", rec.Code, rec.Body)
 			}
-			if got.ThirdPartyID == "" {
-				t.Error("ThirdPartyID is what the order is looked up by and must survive decoding")
+			if got.ExternalID == "" {
+				t.Error("ExternalID is what the order is looked up by and must survive decoding")
 			}
 			if name == "withdrawal_failed" {
 				if got.Succeeded() {
