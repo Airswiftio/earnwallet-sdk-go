@@ -74,6 +74,8 @@ components:
                     type: string
                 decimals:
                     format: uint8
+                    maximum: 255
+                    minimum: 0
                     type: integer
                 event_id:
                     type: string
@@ -113,6 +115,8 @@ components:
                 seed:
                     description: Look up this seed; omit both seed and address to take a new one
                     format: int64
+                    maximum: 4294967295
+                    minimum: 0
                     type: integer
             required:
                 - chain
@@ -129,6 +133,8 @@ components:
                 seed:
                     description: Identifies this wallet on every chain, not just this one
                     format: int64
+                    maximum: 4294967295
+                    minimum: 0
                     type: integer
             required:
                 - address
@@ -289,6 +295,8 @@ components:
                 decimals:
                     description: amount == raw_amount / 10^decimals
                     format: uint8
+                    maximum: 255
+                    minimum: 0
                     type: integer
                 max_daily_withdrawal:
                     description: Rolling 24h ceiling; empty when unset

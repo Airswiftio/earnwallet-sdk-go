@@ -97,9 +97,10 @@ if err != nil {
     return err
 }
 
-// A wallet to receive deposits. Omit seed and address to take a new one;
-// give a seed to look one up, or an address to find out whose it is.
-wallet, err := client.GetWallet(ctx, earnwallet.GetWalletReq{Chain: "bsc"})
+// One endpoint answers three questions; these name them.
+wallet, err := client.TakeWallet(ctx, "bsc")                  // one nobody has used
+wallet, err = client.WalletBySeed(ctx, "bsc", 1001)           // which address is this seed's
+wallet, err = client.WalletByAddress(ctx, "bsc", "0xabc...")  // whose address is this
 
 order, err := client.CreateWithdrawal(ctx, earnwallet.CreateWithdrawalReq{
     ExternalId: "wd-0001",
