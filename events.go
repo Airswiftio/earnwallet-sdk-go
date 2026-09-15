@@ -38,6 +38,11 @@ const (
 // travels so the relationship Amount == RawAmount / 10^Decimals can be checked
 // rather than trusted.
 //
+// Chain is the identifier, and there is no numeric one: EIP-155 ids exist on
+// EVM only, and the numbers Solana and Tron used to carry here were a vendor's
+// invention rather than the chains'. A chain name says which network it is, so
+// a testnet deployment reports "bsc-testnet" rather than "bsc".
+//
 // Address is the deposit address, which is how the paying account is resolved.
 // FromAddress is the on-chain sender, which is a different thing and is what
 // risk and compliance need.
@@ -62,7 +67,6 @@ type DepositEvent struct {
 	RawAmount     string `json:"raw_amount"`
 	Status        int64  `json:"status"`
 	Chain         string `json:"chain"`
-	ChainID       string `json:"chain_id"`
 	Currency      string `json:"currency"`
 	TokenID       string `json:"token_id"`
 	Decimals      uint8  `json:"decimals"`
@@ -94,7 +98,6 @@ type WithdrawalEvent struct {
 	Amount       string `json:"amount"`
 	TxID         string `json:"txid"`
 	Chain        string `json:"chain"`
-	ChainID      string `json:"chain_id"`
 	Currency     string `json:"currency"`
 	TokenID      string `json:"token_id"`
 	BlockHeight  string `json:"block_height"`

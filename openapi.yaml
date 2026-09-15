@@ -28,9 +28,6 @@ components:
                 chain:
                     description: Name to pass as the chain parameter
                     type: string
-                chain_id:
-                    description: Value echoed as chain_id in callbacks
-                    type: string
                 chain_type:
                     description: evm, svm or tvm; decides the address format
                     type: string
@@ -92,8 +89,6 @@ components:
                 block_time:
                     type: string
                 chain:
-                    type: string
-                chain_id:
                     type: string
                 confirmed_at:
                     format: date-time

@@ -29,9 +29,6 @@ type Chain struct {
 	// Chain Name to pass as the chain parameter
 	Chain *string `json:"chain,omitempty"`
 
-	// ChainId Value echoed as chain_id in callbacks
-	ChainId *string `json:"chain_id,omitempty"`
-
 	// ChainType evm, svm or tvm; decides the address format
 	ChainType *string `json:"chain_type,omitempty"`
 
@@ -71,7 +68,6 @@ type Deposit struct {
 	BlockHeight   *string    `json:"block_height,omitempty"`
 	BlockTime     *string    `json:"block_time,omitempty"`
 	Chain         *string    `json:"chain,omitempty"`
-	ChainId       *string    `json:"chain_id,omitempty"`
 	ConfirmedAt   *time.Time `json:"confirmed_at,omitempty"`
 	Currency      *string    `json:"currency,omitempty"`
 	Decimals      *uint8     `json:"decimals,omitempty"`
