@@ -152,20 +152,19 @@ func TestReplayCannotBeRefreshedByEditingTheTimestamp(t *testing.T) {
 	}
 }
 
-func TestDepositHandlerVerifiesBeforeDecoding(t *testing.T) {
+func TestDepositVerifiesBeforeDecoding(t *testing.T) {
 	c := caseNamed(t, "deposit")
 	called := false
-	handler := DepositHandler(at(c.Timestamp, Key{ID: "k", Secret: c.Secret}),
-		func(_ *http.Request, event DepositEvent) error {
-			called = true
-			if event.TxHash != "0xabc" {
-				t.Errorf("TxHash = %q", event.TxHash)
-			}
-			if event.Amount != "12.5" || event.RawAmount != "12500000000000000000" {
-				t.Errorf("amounts arrived as %q / %q", event.Amount, event.RawAmount)
-			}
-			return nil
-		})
+	handler := Handler(at(c.Timestamp, Key{ID: "k", Secret: c.Secret}), OnDeposit(func(_ *http.Request, event DepositEvent) error {
+		called = true
+		if event.TxHash != "0xabc" {
+			t.Errorf("TxHash = %q", event.TxHash)
+		}
+		if event.Amount != "12.5" || event.RawAmount != "12500000000000000000" {
+			t.Errorf("amounts arrived as %q / %q", event.Amount, event.RawAmount)
+		}
+		return nil
+	}))
 
 	rec := post(handler, c.Header, c.Body)
 	if rec.Code != http.StatusOK {
@@ -180,11 +179,10 @@ func TestDepositHandlerVerifiesBeforeDecoding(t *testing.T) {
 // retries.
 func TestABadSignatureIsNotRetryable(t *testing.T) {
 	c := caseNamed(t, "deposit")
-	handler := DepositHandler(at(c.Timestamp, Key{ID: "k", Secret: "wrong"}),
-		func(*http.Request, DepositEvent) error {
-			t.Error("a callback that failed verification reached the handler")
-			return nil
-		})
+	handler := Handler(at(c.Timestamp, Key{ID: "k", Secret: "wrong"}), OnDeposit(func(*http.Request, DepositEvent) error {
+		t.Error("a callback that failed verification reached the handler")
+		return nil
+	}))
 
 	if rec := post(handler, c.Header, c.Body); rec.Code != http.StatusBadRequest {
 		t.Errorf("status = %d, want 400 so the sender stops", rec.Code)
@@ -194,24 +192,22 @@ func TestABadSignatureIsNotRetryable(t *testing.T) {
 // The sender retries anything outside 2xx; this is how a receiver asks for one.
 func TestAHandlerErrorAsksForRedelivery(t *testing.T) {
 	c := caseNamed(t, "deposit")
-	handler := DepositHandler(at(c.Timestamp, Key{ID: "k", Secret: c.Secret}),
-		func(*http.Request, DepositEvent) error { return errors.New("database is unavailable") })
+	handler := Handler(at(c.Timestamp, Key{ID: "k", Secret: c.Secret}), OnDeposit(func(*http.Request, DepositEvent) error { return errors.New("database is unavailable") }))
 
 	if rec := post(handler, c.Header, c.Body); rec.Code != http.StatusInternalServerError {
 		t.Errorf("status = %d, want 500", rec.Code)
 	}
 }
 
-func TestWithdrawalHandlerReadsBothOutcomes(t *testing.T) {
+func TestWithdrawalReadsBothOutcomes(t *testing.T) {
 	for _, name := range []string{"withdrawal_success", "withdrawal_failed"} {
 		t.Run(name, func(t *testing.T) {
 			c := caseNamed(t, name)
 			var got WithdrawalEvent
-			handler := WithdrawalHandler(at(c.Timestamp, Key{ID: "k", Secret: c.Secret}),
-				func(_ *http.Request, event WithdrawalEvent) error {
-					got = event
-					return nil
-				})
+			handler := Handler(at(c.Timestamp, Key{ID: "k", Secret: c.Secret}), OnWithdrawal(func(_ *http.Request, event WithdrawalEvent) error {
+				got = event
+				return nil
+			}))
 			if rec := post(handler, c.Header, c.Body); rec.Code != http.StatusOK {
 				t.Fatalf("status = %d, body %s", rec.Code, rec.Body)
 			}
@@ -240,11 +236,10 @@ func TestAnOversizedBodyIsRejected(t *testing.T) {
 	ts := int64(1786440166)
 	header := "t=" + strconv.FormatInt(ts, 10) + ",v1=" + Sign(secret, ts, []byte(body))
 
-	handler := DepositHandler(at(ts, Key{ID: "k", Secret: secret}),
-		func(*http.Request, DepositEvent) error {
-			t.Error("a truncated body reached the handler")
-			return nil
-		})
+	handler := Handler(at(ts, Key{ID: "k", Secret: secret}), OnDeposit(func(*http.Request, DepositEvent) error {
+		t.Error("a truncated body reached the handler")
+		return nil
+	}))
 
 	if rec := post(handler, header, body); rec.Code != http.StatusBadRequest {
 		t.Errorf("status = %d, want 400", rec.Code)
@@ -252,8 +247,7 @@ func TestAnOversizedBodyIsRejected(t *testing.T) {
 }
 
 func TestOnlyPostIsAccepted(t *testing.T) {
-	handler := DepositHandler(Verifier{Keys: []Key{{ID: "k", Secret: "s"}}},
-		func(*http.Request, DepositEvent) error { return nil })
+	handler := Handler(Verifier{Keys: []Key{{ID: "k", Secret: "s"}}}, OnDeposit(func(*http.Request, DepositEvent) error { return nil }))
 
 	req := httptest.NewRequest(http.MethodGet, "/callbacks/earnwallet", nil)
 	rec := httptest.NewRecorder()
@@ -277,11 +271,10 @@ func post(handler http.Handler, header, body string) *httptest.ResponseRecorder 
 func TestEventFieldsSurviveDecoding(t *testing.T) {
 	c := caseNamed(t, "deposit")
 	var got DepositEvent
-	handler := DepositHandler(at(c.Timestamp, Key{ID: "k", Secret: c.Secret}),
-		func(_ *http.Request, event DepositEvent) error {
-			got = event
-			return nil
-		})
+	handler := Handler(at(c.Timestamp, Key{ID: "k", Secret: c.Secret}), OnDeposit(func(_ *http.Request, event DepositEvent) error {
+		got = event
+		return nil
+	}))
 	if rec := post(handler, c.Header, c.Body); rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, body %s", rec.Code, rec.Body)
 	}
@@ -302,11 +295,10 @@ func TestWithdrawalEventsCarryTheirOutcomeAsAType(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			c := caseNamed(t, name)
 			var got WithdrawalEvent
-			handler := WithdrawalHandler(at(c.Timestamp, Key{ID: "k", Secret: c.Secret}),
-				func(_ *http.Request, event WithdrawalEvent) error {
-					got = event
-					return nil
-				})
+			handler := Handler(at(c.Timestamp, Key{ID: "k", Secret: c.Secret}), OnWithdrawal(func(_ *http.Request, event WithdrawalEvent) error {
+				got = event
+				return nil
+			}))
 			if rec := post(handler, c.Header, c.Body); rec.Code != http.StatusOK {
 				t.Fatalf("status = %d", rec.Code)
 			}

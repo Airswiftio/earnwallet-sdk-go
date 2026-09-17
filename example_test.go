@@ -13,26 +13,27 @@ import (
 // These compile against the real package, so a README snippet cannot drift from
 // the generated API without the build noticing.
 
-func ExampleDepositHandler() {
+func ExampleHandler() {
 	verifier := earnwallet.Verifier{
 		Keys: []earnwallet.Key{{ID: "current", Secret: os.Getenv("EARNWALLET_CALLBACK_SECRET")}},
 	}
 
+	// One address for every event. Which kind arrived is the event field, so a
+	// type added later needs no second URL and no deployment here.
 	mux := http.NewServeMux()
-	mux.Handle("/callbacks/earnwallet/deposit", earnwallet.DepositHandler(verifier,
-		func(r *http.Request, event earnwallet.DepositEvent) error {
-			// Key on TxID: delivery is at-least-once, so this runs again if the
-			// reply is lost.
+	mux.Handle("/callbacks/earnwallet", earnwallet.Handler(verifier,
+		earnwallet.OnDeposit(func(r *http.Request, event earnwallet.DepositEvent) error {
+			// Delivery is at-least-once, so this runs again if the reply is
+			// lost. EventID is the key to dedupe on.
 			return credit(r.Context(), event.EventID, event.Address, event.Amount)
-		}))
-
-	mux.Handle("/callbacks/earnwallet/withdraw", earnwallet.WithdrawalHandler(verifier,
-		func(r *http.Request, event earnwallet.WithdrawalEvent) error {
+		}),
+		earnwallet.OnWithdrawal(func(r *http.Request, event earnwallet.WithdrawalEvent) error {
 			if !event.Succeeded() {
 				return settleFailure(r.Context(), event.ExternalID, event.FailedReason)
 			}
 			return settleSuccess(r.Context(), event.ExternalID, event.EventID)
-		}))
+		}),
+	))
 }
 
 func ExampleClient_CreateWithdrawal() {

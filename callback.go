@@ -38,8 +38,8 @@ type Key struct {
 //
 // Verify the body EXACTLY as it arrived on the wire. Decoding and re-encoding
 // changes bytes - key order, whitespace, number formatting - and the signature
-// will not match. Read the raw body first, verify, then decode. Handler and
-// WithdrawalHandler do this for you.
+// will not match. Read the raw body first, verify, then decode. Handler does
+// this for you.
 //
 // Keys holds every secret currently accepted. During a secret rotation that is
 // both the old and the new one; either verifying is enough, so the two sides

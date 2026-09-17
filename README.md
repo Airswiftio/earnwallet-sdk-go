@@ -19,32 +19,17 @@ on which URL it arrived at, and dedupe on `event_id` — it is stable across
 redeliveries and the reconciliation endpoint reports the same value, so
 catching up after an outage is a set difference rather than re-derived keys.
 
-Two endpoints, one for deposits and one for payouts. Both are signed with
-HMAC-SHA256 over the raw body; the signature travels in `X-Polyflow-Signature`
-and there is no signature field inside the body.
+**One endpoint.** A tenant has one callback address, and which kind of event
+arrived is the `event` field, never the path — so an event type added later
+needs no second URL and no deployment on either side. Every callback is signed
+with HMAC-SHA256 over the raw body; the signature travels in
+`X-Polyflow-Signature` and there is no signature field inside the body.
 
 ```go
 verifier := earnwallet.Verifier{
     Keys: []earnwallet.Key{{ID: "current", Secret: os.Getenv("EARNWALLET_CALLBACK_SECRET")}},
 }
 
-mux.Handle("/callbacks/earnwallet/deposit", earnwallet.DepositHandler(verifier,
-    func(r *http.Request, event earnwallet.DepositEvent) error {
-        return credit(r.Context(), event)
-    }))
-
-mux.Handle("/callbacks/earnwallet/withdraw", earnwallet.WithdrawalHandler(verifier,
-    func(r *http.Request, event earnwallet.WithdrawalEvent) error {
-        return settle(r.Context(), event)
-    }))
-```
-
-### One endpoint instead of two
-
-A receiver that would rather expose a single URL dispatches on `event` instead
-of on the path:
-
-```go
 mux.Handle("/callbacks/earnwallet", earnwallet.Handler(verifier,
     earnwallet.OnDeposit(func(r *http.Request, event earnwallet.DepositEvent) error {
         return credit(r.Context(), event)
@@ -55,24 +40,18 @@ mux.Handle("/callbacks/earnwallet", earnwallet.Handler(verifier,
 ))
 ```
 
-Both shapes are supported; tell us which one you want and the two URLs we are
-configured with become the same URL or stay different.
+`OnWithdrawal` receives both outcomes; `event.Succeeded()` reports which.
 
-Do not point both at one URL and keep using `DepositHandler`. It decodes a
-payout body into a `DepositEvent` without complaining, because JSON leaves
-absent fields at their zero value, and what reaches your deposit path is an
-event with no address and no amount. Nothing reports that anything went wrong.
-
-`Handler` answers an event no handler claims with an error rather than a 2xx,
-so it is redelivered and eventually parked as a dead letter somebody can see.
-A 2xx would end delivery and the event would survive only on our side.
+`Handler` answers an event no handler claims with an error rather than a 2xx, so
+it is redelivered and eventually parked as a dead letter somebody can see. A 2xx
+would end delivery and the event would survive only on our side.
 
 Four things decide whether an integration is correct:
 
 **Verify the raw bytes.** The signature covers the body exactly as it arrived.
 Decoding and re-encoding changes key order, whitespace and number formatting,
-and the signature stops matching. The handlers above read the body first and
-verify before decoding; if you verify by hand, do the same.
+and the signature stops matching. `Handler` reads the body first and verifies
+before decoding; if you verify by hand, do the same.
 
 **Be idempotent.** Delivery is at-least-once. A callback that was processed will
 arrive again if the response was lost. Dedupe on `EventID` — every event has one, it is stable across
