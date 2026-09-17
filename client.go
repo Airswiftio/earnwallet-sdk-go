@@ -144,8 +144,14 @@ func replacePathParam(path, name, value string) string {
 
 // envelope is what every endpoint answers with. Decoding it once here is why
 // the generated methods can return the payload directly.
+//
+// Code is a pointer because zero is the success value: read into an int, a body
+// with no code field at all is indistinguishable from one reporting success.
+// Anything between the caller and the service can answer with JSON of its own -
+// a gateway reporting a rate limit, a proxy reporting no upstream - and that
+// body would otherwise decode into an empty payload and be returned as a result.
 type envelope[T any] struct {
-	Code    int    `json:"code"`
+	Code    *int   `json:"code"`
 	Message string `json:"message"`
 	Data    T      `json:"data"`
 }
@@ -196,21 +202,22 @@ func send[T any](ctx context.Context, c *Client, method, path string, query url.
 		return nil, fmt.Errorf("earnwallet: read response: %w", err)
 	}
 
+	// A body that is not the envelope is a proxy, a gateway or the wrong
+	// address - not the service. Report what arrived rather than a decode error
+	// nobody can act on, and treat a missing code the same way: valid JSON that
+	// carries no verdict is not a verdict.
 	var decoded envelope[T]
-	if err := json.Unmarshal(payload, &decoded); err != nil {
-		// A body that is not the envelope is a proxy, a gateway or the wrong
-		// address - not the service. Report what arrived rather than a decode
-		// error nobody can act on.
+	if err := json.Unmarshal(payload, &decoded); err != nil || decoded.Code == nil {
 		return nil, fmt.Errorf("earnwallet: %s answered %s with a body that is not an envelope: %s",
 			path, resp.Status, truncate(payload))
 	}
-	if decoded.Code != 0 {
-		return nil, &APIError{Code: decoded.Code, Message: decoded.Message, StatusCode: resp.StatusCode}
+	if *decoded.Code != 0 {
+		return nil, &APIError{Code: *decoded.Code, Message: decoded.Message, StatusCode: resp.StatusCode}
 	}
 	// A non-2xx that still decoded as a success envelope is a contradiction;
 	// treating it as success would report an outcome the service never gave.
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return nil, &APIError{Code: decoded.Code, Message: resp.Status, StatusCode: resp.StatusCode}
+		return nil, &APIError{Code: *decoded.Code, Message: resp.Status, StatusCode: resp.StatusCode}
 	}
 	return &decoded.Data, nil
 }

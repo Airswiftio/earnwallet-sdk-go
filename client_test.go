@@ -337,3 +337,56 @@ func TestGetWalletCarriesTheLookupItWasGiven(t *testing.T) {
 		})
 	}
 }
+
+// A gateway between the caller and the service answers with JSON of its own.
+// Read into an int, its missing code field is zero, which is the success value:
+// the call would return an empty payload and no error.
+func TestABodyWithNoCodeIsNotASuccess(t *testing.T) {
+	bodies := []string{
+		`{"status":"ok","message":"upstream healthy"}`,
+		`{"error":"rate limited","retry_after":30}`,
+		`{}`,
+	}
+	for _, body := range bodies {
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(body))
+		}))
+
+		client, err := NewClient(srv.URL)
+		if err != nil {
+			t.Fatal(err)
+		}
+		out, err := send[GetWalletRes](context.Background(), client, http.MethodPost, "/v1/wallet/get", nil, nil)
+		srv.Close()
+
+		if err == nil {
+			t.Errorf("%s was accepted, returning %+v", body, out)
+		}
+		if out != nil {
+			t.Errorf("%s returned a payload as well", body)
+		}
+	}
+}
+
+// Nothing about the change may turn a real envelope into an error, including
+// the success code itself, which is zero.
+func TestCodeZeroIsStillSuccess(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"code":0,"message":"OK","data":{"address":"0x28eb","seed":1}}`))
+	}))
+	defer srv.Close()
+
+	client, err := NewClient(srv.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	out, err := send[GetWalletRes](context.Background(), client, http.MethodPost, "/v1/wallet/get", nil, nil)
+	if err != nil {
+		t.Fatalf("a valid envelope was refused: %v", err)
+	}
+	if out.Address != "0x28eb" {
+		t.Errorf("Address = %q", out.Address)
+	}
+}
