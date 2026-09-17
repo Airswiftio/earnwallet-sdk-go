@@ -37,8 +37,9 @@ func DepositHandler(v Verifier, fn func(*http.Request, DepositEvent) error) http
 }
 
 // WithdrawalHandler serves the payout callback endpoint, which is a different
-// URL from the deposit one. The same ordering and idempotency rules apply; key
-// on WithdrawalEvent.ThirdPartyID.
+// URL from the deposit one. The same ordering and idempotency rules apply:
+// dedupe on EventID, and look the order up by the ExternalID it was submitted
+// with.
 func WithdrawalHandler(v Verifier, fn func(*http.Request, WithdrawalEvent) error) http.Handler {
 	return callbackHandler(v, func(r *http.Request, body []byte) error {
 		var event WithdrawalEvent
