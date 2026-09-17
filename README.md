@@ -39,6 +39,34 @@ mux.Handle("/callbacks/earnwallet/withdraw", earnwallet.WithdrawalHandler(verifi
     }))
 ```
 
+### One endpoint instead of two
+
+A receiver that would rather expose a single URL dispatches on `event` instead
+of on the path:
+
+```go
+mux.Handle("/callbacks/earnwallet", earnwallet.Handler(verifier,
+    earnwallet.OnDeposit(func(r *http.Request, event earnwallet.DepositEvent) error {
+        return credit(r.Context(), event)
+    }),
+    earnwallet.OnWithdrawal(func(r *http.Request, event earnwallet.WithdrawalEvent) error {
+        return settle(r.Context(), event)
+    }),
+))
+```
+
+Both shapes are supported; tell us which one you want and the two URLs we are
+configured with become the same URL or stay different.
+
+Do not point both at one URL and keep using `DepositHandler`. It decodes a
+payout body into a `DepositEvent` without complaining, because JSON leaves
+absent fields at their zero value, and what reaches your deposit path is an
+event with no address and no amount. Nothing reports that anything went wrong.
+
+`Handler` answers an event no handler claims with an error rather than a 2xx,
+so it is redelivered and eventually parked as a dead letter somebody can see.
+A 2xx would end delivery and the event would survive only on our side.
+
 Four things decide whether an integration is correct:
 
 **Verify the raw bytes.** The signature covers the body exactly as it arrived.

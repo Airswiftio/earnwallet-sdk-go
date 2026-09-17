@@ -19,7 +19,8 @@ const maxCallbackBody = 1 << 20
 //
 // Delivery is at-least-once. The same event will arrive again after a network
 // timeout even though it was processed, so fn must be idempotent - key it on
-// DepositEvent.TxID.
+// DepositEvent.EventID. Not on TxHash: one transaction can pay several deposit
+// addresses, so the hash is not unique.
 //
 // Any 2xx ends delivery. Anything else is retried with backoff for about a day,
 // after which the event is parked for an operator and can be replayed by hand.
