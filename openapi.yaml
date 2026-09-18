@@ -327,11 +327,18 @@ components:
                 created_at:
                     format: date-time
                     type: string
+                decimals:
+                    format: uint8
+                    maximum: 255
+                    minimum: 0
+                    type: integer
                 external_id:
                     type: string
                 failed_reason:
                     type: string
                 held_reason:
+                    type: string
+                raw_amount:
                     type: string
                 status:
                     type: string

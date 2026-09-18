@@ -191,9 +191,11 @@ type Withdrawal struct {
 	Chain        *string    `json:"chain,omitempty"`
 	ConfirmedAt  *time.Time `json:"confirmed_at"`
 	CreatedAt    *time.Time `json:"created_at,omitempty"`
+	Decimals     *uint8     `json:"decimals,omitempty"`
 	ExternalId   *string    `json:"external_id,omitempty"`
 	FailedReason *string    `json:"failed_reason,omitempty"`
 	HeldReason   *string    `json:"held_reason,omitempty"`
+	RawAmount    *string    `json:"raw_amount,omitempty"`
 	Status       *string    `json:"status,omitempty"`
 	ToAddress    *string    `json:"to_address,omitempty"`
 	TokenId      *string    `json:"token_id,omitempty"`
