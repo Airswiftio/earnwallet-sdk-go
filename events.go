@@ -78,8 +78,19 @@ type WithdrawalEvent struct {
 	Event   string `json:"event"`
 	EventID string `json:"event_id"`
 
-	ExternalID   string `json:"external_id"`
+	ExternalID string `json:"external_id"`
+	// Amount is what a person reads, RawAmount is what the chain moved, and
+	// Decimals is the relationship between them - the same three a deposit
+	// carries, for the same reason: check Amount == RawAmount / 10^Decimals
+	// rather than trust it.
+	//
+	// The check matters more here. A deposit's Amount is derived from an integer
+	// that was observed; a payout's integer is derived from the amount that was
+	// asked for, so a wrong Decimals sends the wrong quantity and RawAmount is
+	// the only field in this callback that would show it.
 	Amount       string `json:"amount"`
+	RawAmount    string `json:"raw_amount"`
+	Decimals     uint8  `json:"decimals"`
 	Chain        string `json:"chain"`
 	Currency     string `json:"currency"`
 	TokenID      string `json:"token_id"`
