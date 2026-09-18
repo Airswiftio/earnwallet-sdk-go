@@ -68,13 +68,26 @@ you have permanently rejected: that buys a day of pointless retries and a dead
 letter someone has to look at.
 
 **Times are unix seconds.** Both `BlockTime` and `Timestamp`, one unit
-throughout. `Timestamp` is written once when the deposit is credited and
-replayed unchanged, so it does not drift across retries.
+throughout.
+
+`Timestamp` is when we decided the event, not when you received it: on a deposit
+that is the moment it was credited, on a payout the moment the outcome was
+known. Either way it is written once, into the payload the outbox stores, and
+replayed unchanged - so it does not drift across retries and is not a clock you
+can measure delivery lag with.
 
 **Treat amounts as strings.** `Amount` and `RawAmount` are decimal strings. A
 `float64` cannot hold an 18-decimal token amount without losing the low digits.
 `Decimals` travels so you can check `Amount == RawAmount / 10^Decimals` rather
-than trusting it.
+than trusting it. All three are on both events, and on both reconciliation
+endpoints, so the check is the same wherever you run it.
+
+Run it on payouts especially. A deposit's `Amount` is derived from an integer
+that was observed on chain, so the two agreeing tells you the division was
+right. A payout is the other way round: the integer is derived from the amount
+you asked for, so a wrong `Decimals` moves the wrong quantity while the callback
+still echoes the amount you submitted. `RawAmount` is the only field that would
+show it.
 
 ### Rotating the secret
 
