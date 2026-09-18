@@ -13,6 +13,9 @@ type Chain struct {
 	// Chain Name to pass as the chain parameter
 	Chain *string `json:"chain,omitempty"`
 
+	// ChainId EIP-155 id on evm and tvm; an id assigned by this service on svm, which has none. Read it alongside chain, never instead of it
+	ChainId *int64 `json:"chain_id,omitempty"`
+
 	// ChainType evm, svm or tvm; decides the address format
 	ChainType *string `json:"chain_type,omitempty"`
 
@@ -61,7 +64,6 @@ type Deposit struct {
 	TokenId       *string    `json:"token_id,omitempty"`
 	TransferIndex *int64     `json:"transfer_index,omitempty"`
 	TxHash        *string    `json:"tx_hash,omitempty"`
-	Txid          *string    `json:"txid,omitempty"`
 }
 
 // Error defines model for Error.

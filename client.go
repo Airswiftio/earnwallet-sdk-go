@@ -246,11 +246,10 @@ func send[T any](ctx context.Context, c *Client, method, path string, query url.
 
 // checkPath refuses a route that did not come out whole.
 //
-// An empty path parameter leaves an empty segment, which addresses the
-// collection rather than the item - GET /v1/withdrawals/ is a different request
-// from GET /v1/withdrawals/{id}, not a failing one, so it has to be caught
-// before it is sent. A surviving brace means a placeholder was never
-// substituted at all.
+// An empty path parameter leaves an empty segment, which addresses something
+// other than the item it was meant to - a request that succeeds against the
+// wrong thing rather than one that fails, so it has to be caught before it is
+// sent. A surviving brace means a placeholder was never substituted at all.
 func checkPath(path string) error {
 	if open := strings.Index(path, "{"); open >= 0 {
 		name := path[open+1:]

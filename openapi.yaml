@@ -5,6 +5,10 @@ components:
                 chain:
                     description: Name to pass as the chain parameter
                     type: string
+                chain_id:
+                    description: EIP-155 id on evm and tvm; an id assigned by this service on svm, which has none. Read it alongside chain, never instead of it
+                    format: int64
+                    type: integer
                 chain_type:
                     description: evm, svm or tvm; decides the address format
                     type: string
@@ -89,8 +93,6 @@ components:
                     format: int64
                     type: integer
                 tx_hash:
-                    type: string
-                txid:
                     type: string
             type: object
         Error:
