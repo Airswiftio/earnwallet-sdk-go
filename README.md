@@ -60,34 +60,21 @@ redeliveries, and the reconciliation endpoints report the same value.
 Do **not** dedupe deposits on `TxHash`: one transaction can pay several deposit
 addresses, so the hash is not unique. `EventID` carries the transfer index too.
 
-**Answer 2xx only when you are done.** Anything else is retried with backoff for
-about a day, after which the event is parked for an operator and can be replayed
-by hand. Return an error from your function when a retry could genuinely
-succeed — a database that is temporarily down. Do not return one for an event
-you have permanently rejected: that buys a day of pointless retries and a dead
-letter someone has to look at.
+**Answer 2xx only when you are done.** Anything else retries with backoff for
+about a day, then parks for an operator. Return an error only when a retry could
+work — a database that is temporarily down. Never for something you have
+permanently rejected.
 
-**Times are unix seconds.** Both `BlockTime` and `Timestamp`, one unit
-throughout.
+**Times are unix seconds.** `Timestamp` is written once and replayed unchanged,
+so it does not drift across retries and cannot measure delivery lag.
 
-`Timestamp` is when we decided the event, not when you received it: on a deposit
-that is the moment it was credited, on a payout the moment the outcome was
-known. Either way it is written once, into the payload the outbox stores, and
-replayed unchanged - so it does not drift across retries and is not a clock you
-can measure delivery lag with.
+**Treat amounts as strings.** A `float64` loses the low digits of an 18-decimal
+amount. Check `Amount == RawAmount / 10^Decimals`; all three are on both events
+and both reconciliation endpoints.
 
-**Treat amounts as strings.** `Amount` and `RawAmount` are decimal strings. A
-`float64` cannot hold an 18-decimal token amount without losing the low digits.
-`Decimals` travels so you can check `Amount == RawAmount / 10^Decimals` rather
-than trusting it. All three are on both events, and on both reconciliation
-endpoints, so the check is the same wherever you run it.
-
-Run it on payouts especially. A deposit's `Amount` is derived from an integer
-that was observed on chain, so the two agreeing tells you the division was
-right. A payout is the other way round: the integer is derived from the amount
-you asked for, so a wrong `Decimals` moves the wrong quantity while the callback
-still echoes the amount you submitted. `RawAmount` is the only field that would
-show it.
+Check it on payouts especially. A deposit's `Amount` comes from an integer that
+was observed; a payout's integer comes from the amount you asked for, so a wrong
+`Decimals` moves the wrong quantity while the callback echoes what you sent.
 
 ### Rotating the secret
 
@@ -215,11 +202,9 @@ not need a code generator to build.
 
 ## Conformance vectors
 
-`testdata/signature_vectors.json` is the signing contract. The identical file
-lives in the service repository, where the sending half is tested against it.
-A change to the signed material, the header format or the hash therefore fails
-in the commit that makes it, rather than in every integrator's verification
-months later.
+`testdata/signature_vectors.json` is the signing contract. The service tests its
+sending half against the identical file, so a change to the scheme fails in the
+commit that makes it rather than in your verification months later.
 
 Regenerating the vectors to make a test pass is the wrong repair. If the scheme
 must change, the header carries a new `v2` parameter alongside `v1` so receivers
