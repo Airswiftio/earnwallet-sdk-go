@@ -12,6 +12,7 @@ import (
 	"regexp"
 	"strings"
 	"testing"
+	"time"
 )
 
 // The client is hand-written; the specification is generated. This is what
@@ -285,24 +286,6 @@ func TestAPIKeyTravelsAsABearerHeader(t *testing.T) {
 	}
 }
 
-// An empty key is a configuration mistake, not a request without credentials.
-// Sending it anyway would come back as 401 and read as a wrong key.
-func TestAnEmptyAPIKeyIsRefusedBeforeSending(t *testing.T) {
-	sent := false
-	server := stub(t, func(w http.ResponseWriter, r *http.Request) {
-		sent = true
-		writeEnvelope(w, 0, "", GetWalletRes{})
-	})
-	client := dial(t, server.URL, WithAPIKey("   "))
-
-	if _, err := client.GetWallet(context.Background(), GetWalletReq{Chain: "bsc"}); err == nil {
-		t.Fatal("a request went out with an empty credential")
-	}
-	if sent {
-		t.Error("the server was reached")
-	}
-}
-
 // One call covers all three questions, and asking for a wallet without naming
 // one is the only case that takes a seed.
 func TestGetWalletCarriesTheLookupItWasGiven(t *testing.T) {
@@ -388,5 +371,53 @@ func TestCodeZeroIsStillSuccess(t *testing.T) {
 	}
 	if out.Address != "0x28eb" {
 		t.Errorf("Address = %q", out.Address)
+	}
+}
+
+// A deployment whose credential is missing must be refused where it is
+// configured, not on the first call it makes. Deferring the check lets a
+// process start, pass its health check, and fail on the first payout.
+func TestAnEmptyAPIKeyIsRefusedAtConstruction(t *testing.T) {
+	for _, key := range []string{"", "   "} {
+		client, err := NewClient("https://earnwallet.internal", WithAPIKey(key))
+		if err == nil {
+			t.Errorf("WithAPIKey(%q) built a client", key)
+		}
+		if client != nil {
+			t.Errorf("WithAPIKey(%q) returned a client alongside an error", key)
+		}
+	}
+}
+
+func TestNilOptionsAreRefused(t *testing.T) {
+	cases := map[string]Option{
+		"nil http client":    WithHTTPClient(nil),
+		"nil request editor": WithRequestEditor(nil),
+		"nil option":         nil,
+	}
+	for name, opt := range cases {
+		if _, err := NewClient("https://earnwallet.internal", opt); err == nil {
+			t.Errorf("%s was accepted", name)
+		}
+	}
+}
+
+// Forgetting WithHTTPClient must not mean waiting forever.
+func TestTheDefaultClientHasATimeout(t *testing.T) {
+	client, err := NewClient("https://earnwallet.internal")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if client.http.Timeout != DefaultTimeout {
+		t.Errorf("Timeout = %v, want %v", client.http.Timeout, DefaultTimeout)
+	}
+
+	own := &http.Client{Timeout: 3 * time.Second}
+	client, err = NewClient("https://earnwallet.internal", WithHTTPClient(own))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if client.http != own {
+		t.Error("WithHTTPClient did not replace the transport")
 	}
 }

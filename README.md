@@ -126,10 +126,20 @@ there is no transaction.
 The seed identifies that wallet on **every** chain, so one seed plus a chain
 name is all that is ever needed to get an address back.
 
+`NewClient` refuses a configuration it cannot use, so a missing credential is
+an error where it is configured rather than on the first payout. It also gives
+the client a default timeout; `WithHTTPClient` replaces the transport when you
+want your own.
+
 Every response travels in a `{code, message, data}` envelope, and a business
 failure arrives as **HTTP 200 with a non-zero code** rather than as an error
 status. The client unwraps that: `data` is returned, and a non-zero code comes
 back as `*APIError`.
+
+A reply carrying no `code` at all is refused rather than read as success, since
+zero is the success value. That is what a gateway or proxy answering in its own
+shape looks like, and it would otherwise arrive as an empty payload and a nil
+error.
 
 ```go
 var apiErr *earnwallet.APIError

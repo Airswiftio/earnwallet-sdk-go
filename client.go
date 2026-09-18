@@ -10,6 +10,7 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"time"
 )
 
 // This file is the half of the client that does not grow with the API: the
@@ -34,15 +35,26 @@ type Client struct {
 // anything published here.
 type RequestEditor func(*http.Request) error
 
-type Option func(*Client)
+// DefaultTimeout bounds a call when the caller supplies no client of its own.
+// The zero value of http.Client is no timeout at all, and on a money path a
+// stalled service would hold the caller's goroutine until the process ends.
+const DefaultTimeout = 30 * time.Second
 
-// WithHTTPClient replaces the transport. Use it to set a timeout: the default
-// client has none, which is rarely what a service wants.
+// Option configures a Client. It returns an error so a misconfiguration is
+// refused by NewClient rather than surfacing on the first call - a service
+// started without its credential must not report itself healthy and then fail
+// on the first payout.
+type Option func(*Client) error
+
+// WithHTTPClient replaces the transport, for a timeout other than
+// DefaultTimeout, a proxy, or instrumentation.
 func WithHTTPClient(doer *http.Client) Option {
-	return func(c *Client) {
-		if doer != nil {
-			c.http = doer
+	return func(c *Client) error {
+		if doer == nil {
+			return fmt.Errorf("earnwallet: the http client is nil")
 		}
+		c.http = doer
+		return nil
 	}
 }
 
@@ -52,21 +64,26 @@ func WithHTTPClient(doer *http.Client) Option {
 // is the copy that matters. Keep it out of source and out of logs - anything
 // that can read it can submit a payout.
 func WithAPIKey(key string) Option {
-	return WithRequestEditor(func(r *http.Request) error {
+	return func(c *Client) error {
 		if strings.TrimSpace(key) == "" {
 			return fmt.Errorf("earnwallet: the api key is empty")
 		}
-		r.Header.Set("Authorization", "Bearer "+key)
+		c.editors = append(c.editors, func(r *http.Request) error {
+			r.Header.Set("Authorization", "Bearer "+key)
+			return nil
+		})
 		return nil
-	})
+	}
 }
 
 // WithRequestEditor appends an editor. Editors run in the order they were added.
 func WithRequestEditor(edit RequestEditor) Option {
-	return func(c *Client) {
-		if edit != nil {
-			c.editors = append(c.editors, edit)
+	return func(c *Client) error {
+		if edit == nil {
+			return fmt.Errorf("earnwallet: the request editor is nil")
 		}
+		c.editors = append(c.editors, edit)
+		return nil
 	}
 }
 
@@ -84,9 +101,14 @@ func NewClient(baseURL string, opts ...Option) (*Client, error) {
 		return nil, fmt.Errorf("earnwallet: base url %q needs a scheme and a host", baseURL)
 	}
 
-	client := &Client{baseURL: trimmed, http: &http.Client{}}
+	client := &Client{baseURL: trimmed, http: &http.Client{Timeout: DefaultTimeout}}
 	for _, opt := range opts {
-		opt(client)
+		if opt == nil {
+			return nil, fmt.Errorf("earnwallet: a nil option was given")
+		}
+		if err = opt(client); err != nil {
+			return nil, err
+		}
 	}
 	return client, nil
 }
